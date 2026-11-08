@@ -61,7 +61,7 @@ class Pipeline:
             return []
 
         self.repos.prune_stale()
-        issues = self.jira.search(self.cfg.jira.jql, max_results=budget)
+        issues = self.jira.search(self.cfg.search_jql(), max_results=budget)
         log.info("poll: %d ticket(s) matched (budget %d)", len(issues), budget)
         outcomes = [self.process(issue) for issue in issues[:budget]]
         if outcomes:
@@ -113,8 +113,8 @@ class Pipeline:
     def _implement(self, issue: Issue, repo: RepoConfig, plan: Plan, branch: str, worktree: Path, base: str) -> Outcome:
         # Setup runs BEFORE the engine so the repo's own tooling (node_modules, lint hooks, a skills
         # sync) is in place while the agent edits. Setup output is re-checked by the final diff guard.
-        npm_cache = {"npm_config_cache": str(self.cfg.work_dir / "npm-cache")}
-        failed = self._first_failure(guardrails.run_commands(repo.setup_commands, worktree, extra_env=npm_cache))
+        command_env = repo.command_env(self.cfg.work_dir)
+        failed = self._first_failure(guardrails.run_commands(repo.setup_commands, worktree, extra_env=command_env))
         if failed:
             return self._fail(issue, f"Setup `{failed.command}` failed:\n{failed.output_tail}", plan.workflow)
 
@@ -141,7 +141,7 @@ class Pipeline:
         # for a bounded number of repair rounds; each round re-verifies the diff before re-checking.
         repairs = 0
         while True:
-            check_results = guardrails.run_commands(repo.check_commands, worktree, extra_env=npm_cache)
+            check_results = guardrails.run_commands(repo.check_commands, worktree, extra_env=command_env)
             failed = self._first_failure(check_results)
             if failed is None:
                 break
@@ -216,7 +216,7 @@ class Pipeline:
         self._write(self.jira.comment, issue.key, text)
 
     def _move(self, issue: Issue, which: str) -> None:
-        name = self.cfg.jira.transitions[which]
+        name = self.cfg.transition(issue.project, which)
         if self.dry_run:
             log.info("[dry-run] skip transition %s -> %s", issue.key, name)
         elif not self.jira.transition(issue.key, name):

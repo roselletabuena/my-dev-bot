@@ -112,7 +112,9 @@ class FakeJira:
         self.calls.append(("transition", key, name))
         return True
 
-    def search(self, jql, max_results=25): return [make_issue()]
+    def search(self, jql, max_results=25):
+        self.jql = jql  # the query the poll actually sent
+        return [make_issue()]
     def names(self): return [c[0] for c in self.calls]
 
 
