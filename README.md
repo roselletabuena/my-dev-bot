@@ -24,6 +24,11 @@ dev-bot run                         # for real
 Kill switch: create `~/.dev-bot/.bot-paused` (or whatever `work_dir` is) and runs exit immediately.
 Schedule `dev-bot run` every ~15 minutes with Windows Task Scheduler; an internal lock prevents overlaps.
 
+Verified commits: drop an SSH private key at `{work_dir}/signing_key` and add its public half to
+GitHub (Settings -> SSH and GPG keys -> New SSH key -> key type **Signing Key**) on the account whose
+token pushes; the bot then signs every commit and GitHub shows it as **Verified**. No signing key
+there means commits are made unsigned, same as before.
+
 ## Repos
 A ticket goes to the repo whose `jira_projects` lists the ticket's Jira project, so **one Jira project maps to exactly one repo** (config load fails if two repos claim the same project). To add a repo, add a `[[repos]]` block; `jql = '{projects} AND ...'` expands to `project in ("VS", "DS", ...)` from all repos, so the query needs no edit. `config.example.toml` has a Spec Kit app and a spec-free component library side by side.
 

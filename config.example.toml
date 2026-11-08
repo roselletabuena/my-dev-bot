@@ -12,6 +12,10 @@ repair_rounds = 2               # failed checks are fed back to the engine this 
 work_dir = "~/.dev-bot"         # cached clones, worktrees, sqlite state, kill-switch file
 
 git_user_name = "dev-bot"
+# A real email@users.noreply.github.com-shaped address is fine for unsigned commits, but if you turn
+# on commit signing (see README) it must be the actual noreply address of the account whose token
+# pushes (Settings -> Emails), e.g. "{id}+{login}@users.noreply.github.com" -- otherwise GitHub
+# attributes the commit to a nonexistent account and shows "unknown_key" instead of Verified.
 git_user_email = "dev-bot@users.noreply.github.com"
 
 [jira]

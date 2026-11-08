@@ -11,7 +11,7 @@ from dev_bot.engine.base import scrubbed_env
 from dev_bot.guardrails import check_changes
 from dev_bot.jira import JiraClient, adf_to_text
 from dev_bot.lock import LockHeld, RunLock
-from dev_bot.repo import Changes, slugify
+from dev_bot.repo import Changes, RepoManager, slugify
 from dev_bot.triage import TriageError, check_readiness, extract_json
 
 
@@ -57,6 +57,16 @@ def test_adf_to_text_renders_figma_smart_link():
         ]},
     ]}
     assert "https://www.figma.com/design/abc?node-id=1-2" in adf_to_text(adf)
+
+
+def test_commits_are_unsigned_without_a_signing_key(tmp_path):
+    assert RepoManager(tmp_path)._signing_key is None
+
+
+def test_signing_key_is_picked_up_from_the_work_dir(tmp_path):
+    key = tmp_path / "signing_key"
+    key.write_text("not a real key, just needs to exist\n", encoding="utf-8")
+    assert RepoManager(tmp_path)._signing_key == key
 
 
 def test_slugify():
