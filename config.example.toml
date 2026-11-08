@@ -1,19 +1,24 @@
 # Copy to config.toml and adjust. Secrets live in .env, not here.
+#
+# One bot serves every [[repos]] entry below. A ticket goes to the repo whose `jira_projects` lists the
+# ticket's Jira project, so each Jira project maps to exactly one repo. Adding a repo is a new
+# [[repos]] block and nothing else: the {projects} token in `jql` picks up its Jira projects.
 
 engine = "antigravity"          # antigravity | claude
 engine_timeout_s = 900          # per engine call (triage and implementation)
 max_tickets_per_run = 3
 daily_cap = 10                  # max tickets the bot picks up per calendar day
 repair_rounds = 2               # failed checks are fed back to the engine this many times; 0 disables
-work_dir = "~/.dev-bot"      # cached clones, worktrees, sqlite state, kill-switch file
+work_dir = "~/.dev-bot"         # cached clones, worktrees, sqlite state, kill-switch file
 
 git_user_name = "dev-bot"
 git_user_email = "dev-bot@users.noreply.github.com"
 
 [jira]
-base_url = "https://the-three-devsketeers.atlassian.net"
+base_url = "https://your-site.atlassian.net"
+# {projects} expands to `project in ("VS", "DS")`, built from every repo's jira_projects below.
 # Claimed tickets carry the claimed label, so a re-run never picks them up twice.
-jql = 'project = VS AND labels = dev-bot AND labels != bot-claimed AND status = "Ready for Bot" ORDER BY created ASC'
+jql = '{projects} AND labels = dev-bot AND labels != bot-claimed AND status = "Ready for Bot" ORDER BY created ASC'
 claimed_label = "bot-claimed"
 
 [jira.workflow_labels]          # optional: a ticket with one of these labels skips routing and runs that workflow
@@ -21,13 +26,16 @@ bugfix = "bot-bugfix"
 feature = "bot-feature"         # new Spec Kit feature: specify -> plan -> tasks -> implement
 amend = "bot-amend"             # change to a feature that already has specs/NNN-*; quote the folder in the ticket
 
-[jira.transitions]              # Jira transition names in your workflow
+[jira.transitions]              # Jira transition names in your workflow (a repo can override them, see below)
 in_progress = "In Progress"
 in_review = "In Review"
-needs_info = "To Do"          # no "Needs Info" status in VS; bounced tickets go back to To Do
+needs_info = "To Do"            # bounced tickets go back to this status
 
+# ---------------------------------------------------------------------------------------------------
+# Repo 1: a Spec Kit app. Runs all four workflows (the default).
+# ---------------------------------------------------------------------------------------------------
 [[repos]]
-name = "roselletabuena/electa-fullstack"
+name = "roselletabuena/hirangtally-fullstack"
 default_branch = "main"
 jira_projects = ["VS"]
 setup_commands = ["npm ci", "npx prisma generate", "npm run agents:sync"]   # run BEFORE the engine; agents:sync mirrors .agents/skills into .claude/skills for Claude
@@ -37,7 +45,46 @@ check_commands = [              # all must pass; exactly what app-ci.yml runs (l
   "npm run test:unit",
 ]
 allowed_paths = ["src/", "tests/", "public/"]
-denied_paths = [".github/", "infra/", "prisma/migrations/", ".agents/", ".env*", "package-lock.json"]
+denied_paths = [".github/", "infra/", "prisma/migrations/", ".agents/", ".claude/", ".env*", "package-lock.json"]
 max_diff_lines = 300
 spec_dir = "specs"              # Spec Kit folders; feature/amend runs may write here in addition to allowed_paths
 spec_max_diff_lines = 1500      # diff cap for feature/amend runs (spec docs + code)
+env = { npm_config_cache = "{work_dir}/npm-cache" }   # extra env for setup/check commands; {work_dir} is the bot's work_dir
+
+# Repo skills the engine is told about (it reads the SKILL.md files that apply before writing code).
+# This repo has ~45 skills, mostly git, PR and product-management ones the bot must not follow, so
+# list the coding skills explicitly. A skill with a name not matched here is simply not offered.
+skills_include = [
+  "nextjs-react-typescript", "frontend-ui-engineering", "frontend-design", "accessibility",
+  "accessibility-colors", "tdd", "vercel-react-best-practices", "vercel-react-view-transitions",
+  "supabase", "supabase-postgres-best-practices", "constitution-check", "env-validator",
+]
+bugfix_skill = "spec-aware-bugfix"   # the repo's own bugfix method; named in the bugfix prompt even though it is not in skills_include
+
+# ---------------------------------------------------------------------------------------------------
+# Repo 2: a component library with no Spec Kit. Only bugfix and task make sense, so the bot never
+# starts a spec workflow here. Its Jira project (AD) has a "For Review" status where VS has "In Review",
+# so it overrides that one transition; anything not listed in `transitions` uses the global name.
+# ---------------------------------------------------------------------------------------------------
+[[repos]]
+name = "roselletabuena/figma-to-react-design-system"
+default_branch = "main"
+jira_projects = ["AD"]
+transitions = { in_review = "For Review" }
+workflows = ["bugfix", "task"]
+setup_commands = ["npm ci", "npx playwright install chromium"]   # `npm run test` runs Vitest in a real Chromium
+check_commands = ["npm run lint", "npm run build", "npm run test"]
+allowed_paths = ["src/", "public/", ".storybook/", "docs/figma-component-status.md"]   # the create-component skill updates the status tracker
+denied_paths = [".agents/", ".claude/", ".github/", ".env*", "package.json", "package-lock.json"]
+max_diff_lines = 600            # a component is 5 files plus stories and tests
+env = { npm_config_cache = "{work_dir}/npm-cache" }
+
+# Everything in .agents/skills is offered except these: they commit, open PRs, or are not about building a component.
+skills_exclude = ["create-component-pr", "git-atomic-commit", "graphify", "grill-me", "create-components-parallel", "code-review", "design-tokens", "playwright-best-practices"]
+read_first = [                  # mandatory per this repo's AGENTS.md
+  ".agents/rules/design-tokens.md",
+  ".agents/rules/component-architecture.md",
+]
+instructions = """
+Skip the create-component skill's Playwright visual test step: do not create or edit *.visual.spec.ts files or snapshot images. A person generates those afterwards with `npm run test:visual:update`.
+"""
