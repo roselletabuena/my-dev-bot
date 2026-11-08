@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from conftest import FILLED, TEMPLATE, FakeEngine, make_issue
-from electa_bot.guardrails import CheckResult
-from electa_bot.jira import Issue
-from electa_bot.pr_description import (
+from dev_bot.guardrails import CheckResult
+from dev_bot.jira import Issue
+from dev_bot.pr_description import (
     _strip_fence,
     build_description,
     finalize,

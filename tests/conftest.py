@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from electa_bot.config import Config, JiraConfig, RepoConfig
-from electa_bot.engine.base import EngineResult
-from electa_bot.github import PullRequest
-from electa_bot.jira import Issue
-from electa_bot.notify import Notifier
-from electa_bot.pipeline import Pipeline
-from electa_bot.repo import RepoManager
-from electa_bot.state import State
+from dev_bot.config import Config, JiraConfig, RepoConfig
+from dev_bot.engine.base import EngineResult
+from dev_bot.github import PullRequest
+from dev_bot.jira import Issue
+from dev_bot.notify import Notifier
+from dev_bot.pipeline import Pipeline
+from dev_bot.repo import RepoManager
+from dev_bot.state import State
 
 GIT_ID = ["-c", "user.name=t", "-c", "user.email=t@t"]
 
@@ -56,6 +56,14 @@ SEED_SPEC = "# Feature Specification: Greeting\n\n**Jira Key**: [ELE-9](https://
 
 def git(*args: str, cwd: Path) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def write_skill(root: Path, directory: str, name: str, header: str | None = None) -> None:
+    """A skill folder as a repo keeps it (`<directory>/<name>/SKILL.md`, with a frontmatter header)."""
+    folder = root / directory / name
+    folder.mkdir(parents=True, exist_ok=True)
+    header = f"name: {name}\ndescription: How to do {name}." if header is None else header
+    (folder / "SKILL.md").write_text(f"---\n{header}\n---\n# {name}\n", encoding="utf-8")
 
 
 @pytest.fixture
@@ -112,7 +120,9 @@ class FakeJira:
         self.calls.append(("transition", key, name))
         return True
 
-    def search(self, jql, max_results=25): return [make_issue()]
+    def search(self, jql, max_results=25):
+        self.jql = jql  # the query the poll actually sent
+        return [make_issue()]
     def names(self): return [c[0] for c in self.calls]
 
 

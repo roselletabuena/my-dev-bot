@@ -44,8 +44,8 @@ class RepoManager:
         root: Path,
         token: str | None = None,
         remote_url: Callable[[str], str] | None = None,
-        user_name: str = "electa-bot",
-        user_email: str = "electa-bot@users.noreply.github.com",
+        user_name: str = "dev-bot",
+        user_email: str = "dev-bot@users.noreply.github.com",
     ):
         self.root = root
         self.token = token
@@ -145,14 +145,29 @@ class RepoManager:
         """Full staged diff against `base` (call after collect_changes, which stages everything)."""
         return self._git("diff", "--cached", base, cwd=worktree)
 
+    @property
+    def _signing_key(self) -> Path | None:
+        """An SSH signing key at `{work_dir}/signing_key` (if present) is used to sign commits.
+
+        No config flag: drop a private key there (and add its public half to GitHub as a
+        "Signing Key" on the account that pushes) to get the commit "Verified" badge.
+        """
+        key = self.root / "signing_key"
+        return key if key.is_file() else None
+
     def commit(self, worktree: Path, message: str, base: str) -> None:
         """One bot-authored commit on top of `base` (squashing any commits the engine made).
 
         Normal commit: repo hooks (e.g. Husky lint-staged) run. Never --no-verify.
         """
         self._git("reset", "--soft", base, cwd=worktree)
+        signing = self._signing_key
+        extra = (
+            ["-c", "gpg.format=ssh", "-c", f"user.signingkey={signing}", "-c", "commit.gpgsign=true"]
+            if signing else []
+        )
         self._git(
-            "-c", f"user.name={self.user_name}", "-c", f"user.email={self.user_email}",
+            "-c", f"user.name={self.user_name}", "-c", f"user.email={self.user_email}", *extra,
             "commit", "-m", message,
             cwd=worktree,
         )

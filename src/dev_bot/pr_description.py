@@ -16,7 +16,7 @@ from .guardrails import CheckResult
 from .jira import Issue
 from .prompt import build_pr_body, build_pr_description_prompt
 
-log = logging.getLogger("electa_bot")
+log = logging.getLogger("dev_bot")
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _OUTPUT_BLOCK = re.compile(r"```text\s*\n<!--[^\n]*(?:paste|output)[^\n]*-->\s*\n```", re.IGNORECASE)
@@ -69,7 +69,7 @@ def finalize(body: str, issue: Issue, jira_url: str, results: list[CheckResult],
     if issue.key not in body:  # the link must exist even if the model dropped it
         body = f"Jira: [{issue.key}]({jira_url}) - {issue.summary}\n\n{body}"
     note = f" Checks passed after {repairs} automatic fix round(s)." if repairs else ""
-    return f"{body.rstrip()}\n\n_Opened as a draft by electa-bot.{note} Please review before merging._"
+    return f"{body.rstrip()}\n\n_Opened as a draft by dev-bot.{note} Please review before merging._"
 
 
 def build_description(
@@ -96,7 +96,7 @@ def _generate(
     prompt = build_pr_description_prompt(issue, jira_base_url, template, clipped)
     try:
         # Empty scratch dir: the model only needs the text above, never repo or network access.
-        with tempfile.TemporaryDirectory(prefix="electa-pr-") as scratch:
+        with tempfile.TemporaryDirectory(prefix="dev-pr-") as scratch:
             result = engine.run(Path(scratch), prompt, timeout_s)
     except Exception:  # a description problem must never block an otherwise good PR
         log.exception("PR description generation crashed; using fallback")

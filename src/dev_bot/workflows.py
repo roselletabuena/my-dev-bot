@@ -6,6 +6,7 @@ A stage is one engine call. The pipeline runs the guardrails after every stage a
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -16,7 +17,10 @@ from .jira import Issue
 from .orchestrator import AMEND, BUGFIX, TASK, Route
 from .prompt import build_bugfix_prompt, build_stage_prompt, build_task_prompt
 from .repo import slugify
+from .skills import Guidance, gather_guidance
 from .specs import is_check_task, next_folder, unfinished_tasks
+
+log = logging.getLogger("dev_bot")
 
 Verify = Callable[[Path, list[str], str], "str | None"]  # (worktree, changed files, engine reply) -> problem
 Halts = Callable[[str], "str | None"]  # engine reply -> reason to hand the ticket back to a human
@@ -44,11 +48,17 @@ def build_plan(
     route: Route, issue: Issue, repo: RepoConfig, worktree: Path, cfg: Config, agents_md: str
 ) -> Plan:
     rules = repo.for_workflow(route.workflow)
+    guide = gather_guidance(worktree, repo)  # the repo's own skills; lets the engine build the way the repo does
+    log.info(
+        "%s: offering %d repo skill(s) to the engine%s",
+        issue.key, len(guide.skills), f": {', '.join(s.name for s in guide.skills)}" if guide.skills else "",
+    )
     if route.workflow == TASK:
-        return Plan(TASK, rules, [Stage("implement", build_task_prompt(issue, rules, agents_md))])
+        return Plan(TASK, rules, [Stage("implement", build_task_prompt(issue, rules, agents_md, guide))])
     if route.workflow == BUGFIX:
         hint = f"{repo.spec_dir.strip('/')}/{route.spec.folder}" if route.spec else ""
-        return Plan(BUGFIX, rules, [_bugfix_stage(issue, rules, agents_md, hint, cfg.jira.workflow_labels[AMEND])])
+        stage = _bugfix_stage(issue, rules, agents_md, hint, cfg.jira.workflow_labels[AMEND], guide)
+        return Plan(BUGFIX, rules, [stage])
 
     spec_root = repo.spec_dir.strip("/")
     if route.workflow == AMEND:
@@ -61,7 +71,7 @@ def build_plan(
     jira_url = f"{cfg.jira.base_url}/browse/{issue.key}"
 
     def stage(name: str, verify: Verify) -> Stage:
-        prompt = build_stage_prompt(f"{kind}.{name}", issue, rules, folder, jira_url, agents_md)
+        prompt = build_stage_prompt(f"{kind}.{name}", issue, rules, folder, jira_url, agents_md, guide)
         return Stage(name, prompt, lambda w, files, reply: _own_folder_only(files, spec_root, d) or verify(w, files, reply))
 
     def touched(*names: str) -> Verify:
@@ -95,9 +105,13 @@ def build_plan(
     return Plan(route.workflow, rules, stages)
 
 
-def _bugfix_stage(issue: Issue, repo: RepoConfig, agents_md: str, spec_hint: str, amend_label: str) -> Stage:
+def _bugfix_stage(
+    issue: Issue, repo: RepoConfig, agents_md: str, spec_hint: str, amend_label: str, guide: Guidance
+) -> Stage:
     def halts(reply: str) -> str | None:
-        if _ESCALATE.search(reply):  # a wide spec change is a spec amendment, not a bugfix a human has not reviewed
+        # A wide spec change is a spec amendment, not a bugfix a human has not reviewed. Only a repo that
+        # runs amendments can be told to continue that way.
+        if repo.spec_aware and _ESCALATE.search(reply):
             return f"{reply.strip()}\nTo continue, add the `{amend_label}` label and quote the spec folder in the ticket."
         return reply.strip() if _CLASS_D.search(reply) else None
 
@@ -106,7 +120,7 @@ def _bugfix_stage(issue: Issue, repo: RepoConfig, agents_md: str, spec_hint: str
             return "No regression test was added or changed."
         return None
 
-    return Stage("bugfix", build_bugfix_prompt(issue, repo, agents_md, spec_hint), verify, halts)
+    return Stage("bugfix", build_bugfix_prompt(issue, repo, agents_md, spec_hint, guide), verify, halts)
 
 
 def _own_folder_only(files: list[str], spec_root: str, own: str) -> str | None:

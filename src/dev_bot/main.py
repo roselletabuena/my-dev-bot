@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import load_config
+from .config import ConfigError, load_config
 from .engine import make_engine
 from .github import GitHubClient, resolve_token
 from .jira import JiraClient
@@ -17,7 +17,10 @@ from .state import State
 
 
 def build_pipeline(config_path: Path, dry_run: bool) -> Pipeline:
-    cfg = load_config(config_path)
+    try:
+        cfg = load_config(config_path)
+    except ConfigError as exc:
+        raise SystemExit(f"config error in {config_path}: {exc}") from None
     token = resolve_token(cfg.secrets.github_token)
     if not token:
         raise SystemExit("No GitHub token: set GITHUB_TOKEN or run `gh auth login`.")
@@ -35,7 +38,7 @@ def build_pipeline(config_path: Path, dry_run: bool) -> Pipeline:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="electa-bot", description="Jira tickets -> draft GitHub PRs")
+    parser = argparse.ArgumentParser(prog="dev-bot", description="Jira tickets -> draft GitHub PRs")
     parser.add_argument("--config", type=Path, default=Path("config.toml"))
     parser.add_argument("--dry-run", action="store_true", help="do everything except Jira writes, push and PR")
     parser.add_argument("-v", "--verbose", action="store_true")

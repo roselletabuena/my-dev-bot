@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 import requests
+
+log = logging.getLogger("dev_bot")
 
 
 @dataclass
@@ -28,9 +31,16 @@ def adf_to_text(node: object) -> str:
         return "".join(adf_to_text(n) for n in node)
     kind = node.get("type")
     if kind == "text":
-        return node.get("text", "")
+        text = node.get("text", "")
+        link = next((m for m in node.get("marks", []) if m.get("type") == "link"), None)
+        if link:
+            href = link.get("attrs", {}).get("href", "")
+            return f"{text} ({href})" if href and href not in text else text
+        return text
     if kind == "hardBreak":
         return "\n"
+    if kind in ("inlineCard", "blockCard", "embedCard"):
+        return node.get("attrs", {}).get("url", "")
     inner = adf_to_text(node.get("content"))
     if kind in ("paragraph", "heading", "listItem", "codeBlock", "blockquote"):
         return inner.rstrip("\n") + "\n"
@@ -109,11 +119,15 @@ class JiraClient:
         resp = self.session.get(self._url(f"/issue/{key}/transitions"), timeout=30)
         resp.raise_for_status()
         wanted = name.lower()
-        for t in resp.json().get("transitions", []):
+        offered = resp.json().get("transitions", [])
+        for t in offered:
             if t["name"].lower() == wanted or t.get("to", {}).get("name", "").lower() == wanted:
                 post = self.session.post(
                     self._url(f"/issue/{key}/transitions"), json={"transition": {"id": t["id"]}}, timeout=30
                 )
                 post.raise_for_status()
                 return True
+        # The usual cause is a status named differently in this project: say what the workflow does offer.
+        choices = ", ".join(f"{t['name']!r} -> {t.get('to', {}).get('name', '?')!r}" for t in offered) or "(none)"
+        log.warning("%s: no transition to %r from its current status; the workflow offers: %s", key, name, choices)
         return False

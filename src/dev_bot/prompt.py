@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .config import RepoConfig
 from .jira import Issue
+from .skills import Guidance
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "prompts"),
@@ -23,8 +24,8 @@ def render(name: str, /, **context: object) -> str:
     return _env.get_template(name).render(**context)
 
 
-def build_task_prompt(issue: Issue, repo: RepoConfig, agents_md: str = "") -> str:
-    return render("task.md", issue=issue, repo=repo, agents_md=agents_md)
+def build_task_prompt(issue: Issue, repo: RepoConfig, agents_md: str = "", guide: Guidance | None = None) -> str:
+    return render("task.md", issue=issue, repo=repo, agents_md=agents_md, guide=guide or Guidance())
 
 
 def build_repair_prompt(issue: Issue, repo: RepoConfig, command: str, output: str) -> str:
@@ -39,16 +40,30 @@ def build_pr_description_prompt(issue: Issue, jira_base_url: str, template: str,
     return render("pr_description.md", issue=issue, jira_base_url=jira_base_url, template=template, diff=diff)
 
 
-def build_routing_prompt(issue: Issue, specs: list) -> str:
-    return render("routing.md", issue=issue, specs=specs)
+ROUTING_CHOICES = ("bugfix", "amend", "feature", "task")
 
 
-def build_bugfix_prompt(issue: Issue, repo: RepoConfig, agents_md: str = "", spec_hint: str = "") -> str:
-    return render("bugfix.md", issue=issue, repo=repo, agents_md=agents_md, spec_hint=spec_hint)
+def build_routing_prompt(issue: Issue, specs: list, workflows: list[str] | tuple[str, ...] = ROUTING_CHOICES) -> str:
+    """`workflows` is what the classifier may pick: the ones the ticket's repo allows."""
+    return render("routing.md", issue=issue, specs=specs, workflows=list(workflows))
+
+
+def build_bugfix_prompt(
+    issue: Issue, repo: RepoConfig, agents_md: str = "", spec_hint: str = "", guide: Guidance | None = None
+) -> str:
+    return render(
+        "bugfix.md", issue=issue, repo=repo, agents_md=agents_md, spec_hint=spec_hint, guide=guide or Guidance()
+    )
 
 
 def build_stage_prompt(
-    stage: str, issue: Issue, repo: RepoConfig, spec_folder: str, jira_url: str, agents_md: str = ""
+    stage: str,
+    issue: Issue,
+    repo: RepoConfig,
+    spec_folder: str,
+    jira_url: str,
+    agents_md: str = "",
+    guide: Guidance | None = None,
 ) -> str:
     """One stage of `feature` (new spec folder) or `amend` (existing spec folder), keyed like "feature.plan"."""
     return render(
@@ -59,6 +74,7 @@ def build_stage_prompt(
         spec_folder=spec_folder,
         spec_path=f"{repo.spec_dir.strip('/')}/{spec_folder}",
         jira_url=jira_url,
+        guide=guide or Guidance(),
     )
 
 
@@ -69,5 +85,5 @@ def build_pr_body(issue_url: str, issue: Issue, results: list, repairs: int = 0)
     if passed:
         note = f" after {repairs} automatic fix round(s)" if repairs else ""
         parts.append(f"## Checks run by the bot (all passed{note})\n" + "\n".join(passed))
-    parts.append("_Opened as a draft by electa-bot. Please review before merging._")
+    parts.append("_Opened as a draft by dev-bot. Please review before merging._")
     return "\n\n".join(parts)

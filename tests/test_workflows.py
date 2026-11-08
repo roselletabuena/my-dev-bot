@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from conftest import SEED_SPEC, FakeEngine, git, make_issue
 
-from electa_bot import orchestrator
-from electa_bot.config import RepoConfig
-from electa_bot.engine.base import EngineResult
-from electa_bot.specs import is_check_task, list_specs, next_folder, unfinished_tasks
+from dev_bot import orchestrator
+from dev_bot.config import RepoConfig
+from dev_bot.engine.base import EngineResult
+from dev_bot.specs import is_check_task, list_specs, next_folder, unfinished_tasks
 
 BRANCH = "bot/ELE-1-fix-greeting"
 

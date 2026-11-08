@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import logging
 import time
 
 import pytest
 
 from conftest import FakeEngine, make_issue
-from electa_bot.config import RepoConfig
-from electa_bot.engine.base import scrubbed_env
-from electa_bot.guardrails import check_changes
-from electa_bot.jira import JiraClient, adf_to_text
-from electa_bot.lock import LockHeld, RunLock
-from electa_bot.repo import Changes, slugify
-from electa_bot.triage import TriageError, check_readiness, extract_json
+from dev_bot.config import RepoConfig
+from dev_bot.engine.base import scrubbed_env
+from dev_bot.guardrails import check_changes
+from dev_bot.jira import JiraClient, adf_to_text
+from dev_bot.lock import LockHeld, RunLock
+from dev_bot.repo import Changes, RepoManager, slugify
+from dev_bot.triage import TriageError, check_readiness, extract_json
 
 
 def repo(**kw) -> RepoConfig:
@@ -48,6 +49,26 @@ def test_adf_to_text():
     assert adf_to_text(None) == ""
 
 
+def test_adf_to_text_renders_figma_smart_link():
+    adf = {"type": "doc", "content": [
+        {"type": "paragraph", "content": [
+            {"type": "text", "text": "Figma: ", "marks": [{"type": "strong"}]},
+            {"type": "inlineCard", "attrs": {"url": "https://www.figma.com/design/abc?node-id=1-2"}},
+        ]},
+    ]}
+    assert "https://www.figma.com/design/abc?node-id=1-2" in adf_to_text(adf)
+
+
+def test_commits_are_unsigned_without_a_signing_key(tmp_path):
+    assert RepoManager(tmp_path)._signing_key is None
+
+
+def test_signing_key_is_picked_up_from_the_work_dir(tmp_path):
+    key = tmp_path / "signing_key"
+    key.write_text("not a real key, just needs to exist\n", encoding="utf-8")
+    assert RepoManager(tmp_path)._signing_key == key
+
+
 def test_slugify():
     assert slugify("Fix: the Login!! button") == "fix-the-login-button"
     assert slugify("???") == "change"
@@ -61,7 +82,7 @@ def test_extract_json_tolerates_noise():
 def test_triage_parse_failure_raises():
     class Garbage:
         def run(self, workdir, prompt, timeout_s):
-            from electa_bot.engine.base import EngineResult
+            from dev_bot.engine.base import EngineResult
             return EngineResult(ok=True, response="I think it's fine")
 
     with pytest.raises(TriageError):
@@ -71,7 +92,7 @@ def test_triage_parse_failure_raises():
 def test_triage_not_ready_always_has_a_question():
     class Vague:
         def run(self, workdir, prompt, timeout_s):
-            from electa_bot.engine.base import EngineResult
+            from dev_bot.engine.base import EngineResult
             return EngineResult(ok=True, response='{"ready": false}')
 
     r = check_readiness(Vague(), make_issue(), 5)
@@ -106,7 +127,7 @@ def test_jira_search_transition_and_comment(requests_mock):
     requests_mock.post(f"{base}/search/jql", json={"issues": [{
         "key": "ELE-9",
         "fields": {"summary": "S", "project": {"key": "ELE"}, "status": {"name": "Ready for Bot"},
-                   "labels": ["electa-bot"],
+                   "labels": ["dev-bot"],
                    "description": {"type": "doc", "content": [
                        {"type": "paragraph", "content": [{"type": "text", "text": "Do it"}]}]}},
     }]})
@@ -123,3 +144,16 @@ def test_jira_search_transition_and_comment(requests_mock):
     client.comment("ELE-9", "hi")
     assert comment.last_request.headers["Authorization"].startswith("Basic ")
     assert comment.last_request.json()["body"]["content"][0]["content"][0]["text"] == "hi"
+
+
+def test_a_missing_jira_transition_says_what_the_workflow_does_offer(requests_mock, caplog):
+    base = "https://x.atlassian.net/rest/api/3/issue/AD-1/transitions"
+    requests_mock.get(base, json={"transitions": [{"id": "5", "name": "Review", "to": {"name": "For Review"}}]})
+    client = JiraClient("https://x.atlassian.net", "me@x.com", "tok")
+    with caplog.at_level(logging.WARNING, logger="dev_bot"):
+        assert client.transition("AD-1", "In Review") is False  # this project has no "In Review" status
+    assert "'Review' -> 'For Review'" in caplog.text and "'In Review'" in caplog.text
+
+    post = requests_mock.post(base, status_code=204)
+    assert client.transition("AD-1", "For Review") is True  # matched by the target status, not the transition's name
+    assert post.last_request.json() == {"transition": {"id": "5"}}

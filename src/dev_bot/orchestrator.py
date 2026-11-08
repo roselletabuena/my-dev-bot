@@ -14,10 +14,11 @@ from .prompt import build_routing_prompt
 from .specs import Spec, find_by_reference, list_specs
 from .triage import extract_json
 
-log = logging.getLogger("electa_bot")
+log = logging.getLogger("dev_bot")
 
 BUGFIX, FEATURE, AMEND, TASK = "bugfix", "feature", "amend", "task"
 WORKFLOWS = (BUGFIX, FEATURE, AMEND, TASK)
+ROUTING_ORDER = (BUGFIX, AMEND, FEATURE, TASK)  # the order the classifier is offered them in
 
 
 class RoutingError(RuntimeError):
@@ -37,22 +38,42 @@ class Route:
 
 
 def route_ticket(issue: Issue, worktree: Path, repo: RepoConfig, cfg: Config, engine: CodeEngine) -> Route:
-    """Cheap, deterministic signals first; the engine is asked only when they leave it open."""
-    specs = list_specs(worktree, repo.spec_dir)
+    """Cheap, deterministic signals first; the engine is asked only when they leave it open.
+
+    Only the workflows `repo.workflows` allows can be chosen, so a repo without Spec Kit is never
+    sent down the feature/amend path.
+    """
+    allowed = [wf for wf in ROUTING_ORDER if repo.allows(wf)]
+    specs = list_specs(worktree, repo.spec_dir) if repo.spec_aware else []
     text = f"{issue.summary}\n{issue.description}"
     referenced = find_by_reference(specs, text, [issue.key])
 
     labelled = [wf for wf, label in cfg.jira.workflow_labels.items() if label in issue.labels]
     if labelled:
-        return _finish(Route(labelled[0], f"ticket carries the {cfg.jira.workflow_labels[labelled[0]]!r} label", referenced), specs)
+        wf, label = labelled[0], cfg.jira.workflow_labels[labelled[0]]
+        if wf not in allowed:  # an explicit request for something this repo cannot do goes back to a human
+            raise RoutingError(
+                [f"The `{label}` label asks for the {wf} workflow, which {repo.name} does not run (it runs: {', '.join(allowed)}). Remove the label or pick another."]
+            )
+        return _finish(Route(wf, f"ticket carries the {label!r} label", referenced), specs)
 
     if issue.issue_type.lower() == "bug":
-        return Route(BUGFIX, "Jira issue type is Bug", referenced)
+        if BUGFIX in allowed:
+            return Route(BUGFIX, "Jira issue type is Bug", referenced)
+        return Route(_fallback(allowed), "Jira issue type is Bug, but this repo does not run the bugfix workflow")
 
-    if referenced:
+    if referenced and AMEND in allowed:
         return Route(AMEND, f"ticket points at existing spec {referenced.folder}", referenced)
 
-    return _classify(issue, specs, cfg, engine)
+    if len(allowed) == 1:  # nothing to decide, so do not spend an engine call on it
+        return Route(allowed[0], f"the only workflow {repo.name} runs")
+
+    return _classify(issue, specs, cfg, engine, allowed)
+
+
+def _fallback(allowed: list[str]) -> str:
+    """The workflow to use when no signal picks one: the small task if the repo runs it."""
+    return TASK if TASK in allowed else allowed[0]
 
 
 def _finish(route: Route, specs: list[Spec]) -> Route:
@@ -64,16 +85,17 @@ def _finish(route: Route, specs: list[Spec]) -> Route:
     return route
 
 
-def _classify(issue: Issue, specs: list[Spec], cfg: Config, engine: CodeEngine) -> Route:
+def _classify(issue: Issue, specs: list[Spec], cfg: Config, engine: CodeEngine, allowed: list[str]) -> Route:
     # Empty scratch dir, like the readiness check: classification needs the ticket text and spec titles only.
-    with tempfile.TemporaryDirectory(prefix="electa-route-") as scratch:
-        result = engine.run(Path(scratch), build_routing_prompt(issue, specs), cfg.engine_timeout_s)
+    with tempfile.TemporaryDirectory(prefix="dev-route-") as scratch:
+        result = engine.run(Path(scratch), build_routing_prompt(issue, specs, allowed), cfg.engine_timeout_s)
     data = extract_json(result.response) if result.ok else None
     workflow = str((data or {}).get("workflow", "")).lower()
-    if workflow not in WORKFLOWS:
-        reason = result.error if not result.ok else f"unparseable routing reply {result.response[:120]!r}"
-        log.warning("%s: routing fell back to the small-task workflow (%s)", issue.key, reason)
-        return Route(TASK, f"classifier unavailable ({reason})")
+    if workflow not in allowed:  # unusable, or a workflow this repo does not run
+        reason = result.error if not result.ok else f"unusable routing reply {result.response[:120]!r}"
+        fallback = _fallback(allowed)
+        log.warning("%s: routing fell back to the %s workflow (%s)", issue.key, fallback, reason)
+        return Route(fallback, f"classifier unavailable ({reason})")
 
     reason = str(data.get("reason") or "classified by the engine")
     if workflow != AMEND:
