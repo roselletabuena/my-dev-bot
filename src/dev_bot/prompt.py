@@ -39,8 +39,12 @@ def build_pr_description_prompt(issue: Issue, jira_base_url: str, template: str,
     return render("pr_description.md", issue=issue, jira_base_url=jira_base_url, template=template, diff=diff)
 
 
-def build_routing_prompt(issue: Issue, specs: list) -> str:
-    return render("routing.md", issue=issue, specs=specs)
+ROUTING_CHOICES = ("bugfix", "amend", "feature", "task")
+
+
+def build_routing_prompt(issue: Issue, specs: list, workflows: list[str] | tuple[str, ...] = ROUTING_CHOICES) -> str:
+    """`workflows` is what the classifier may pick: the ones the ticket's repo allows."""
+    return render("routing.md", issue=issue, specs=specs, workflows=list(workflows))
 
 
 def build_bugfix_prompt(issue: Issue, repo: RepoConfig, agents_md: str = "", spec_hint: str = "") -> str:

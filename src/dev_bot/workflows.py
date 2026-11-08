@@ -97,7 +97,9 @@ def build_plan(
 
 def _bugfix_stage(issue: Issue, repo: RepoConfig, agents_md: str, spec_hint: str, amend_label: str) -> Stage:
     def halts(reply: str) -> str | None:
-        if _ESCALATE.search(reply):  # a wide spec change is a spec amendment, not a bugfix a human has not reviewed
+        # A wide spec change is a spec amendment, not a bugfix a human has not reviewed. Only a repo that
+        # runs amendments can be told to continue that way.
+        if repo.spec_aware and _ESCALATE.search(reply):
             return f"{reply.strip()}\nTo continue, add the `{amend_label}` label and quote the spec folder in the ticket."
         return reply.strip() if _CLASS_D.search(reply) else None
 
