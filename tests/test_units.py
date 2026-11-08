@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 import pytest
@@ -123,3 +124,16 @@ def test_jira_search_transition_and_comment(requests_mock):
     client.comment("ELE-9", "hi")
     assert comment.last_request.headers["Authorization"].startswith("Basic ")
     assert comment.last_request.json()["body"]["content"][0]["content"][0]["text"] == "hi"
+
+
+def test_a_missing_jira_transition_says_what_the_workflow_does_offer(requests_mock, caplog):
+    base = "https://x.atlassian.net/rest/api/3/issue/AD-1/transitions"
+    requests_mock.get(base, json={"transitions": [{"id": "5", "name": "Review", "to": {"name": "For Review"}}]})
+    client = JiraClient("https://x.atlassian.net", "me@x.com", "tok")
+    with caplog.at_level(logging.WARNING, logger="dev_bot"):
+        assert client.transition("AD-1", "In Review") is False  # this project has no "In Review" status
+    assert "'Review' -> 'For Review'" in caplog.text and "'In Review'" in caplog.text
+
+    post = requests_mock.post(base, status_code=204)
+    assert client.transition("AD-1", "For Review") is True  # matched by the target status, not the transition's name
+    assert post.last_request.json() == {"transition": {"id": "5"}}

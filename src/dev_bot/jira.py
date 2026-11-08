@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 import requests
+
+log = logging.getLogger("dev_bot")
 
 
 @dataclass
@@ -109,11 +112,15 @@ class JiraClient:
         resp = self.session.get(self._url(f"/issue/{key}/transitions"), timeout=30)
         resp.raise_for_status()
         wanted = name.lower()
-        for t in resp.json().get("transitions", []):
+        offered = resp.json().get("transitions", [])
+        for t in offered:
             if t["name"].lower() == wanted or t.get("to", {}).get("name", "").lower() == wanted:
                 post = self.session.post(
                     self._url(f"/issue/{key}/transitions"), json={"transition": {"id": t["id"]}}, timeout=30
                 )
                 post.raise_for_status()
                 return True
+        # The usual cause is a status named differently in this project: say what the workflow does offer.
+        choices = ", ".join(f"{t['name']!r} -> {t.get('to', {}).get('name', '?')!r}" for t in offered) or "(none)"
+        log.warning("%s: no transition to %r from its current status; the workflow offers: %s", key, name, choices)
         return False
