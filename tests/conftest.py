@@ -58,6 +58,14 @@ def git(*args: str, cwd: Path) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
 
 
+def write_skill(root: Path, directory: str, name: str, header: str | None = None) -> None:
+    """A skill folder as a repo keeps it (`<directory>/<name>/SKILL.md`, with a frontmatter header)."""
+    folder = root / directory / name
+    folder.mkdir(parents=True, exist_ok=True)
+    header = f"name: {name}\ndescription: How to do {name}." if header is None else header
+    (folder / "SKILL.md").write_text(f"---\n{header}\n---\n# {name}\n", encoding="utf-8")
+
+
 @pytest.fixture
 def origin(tmp_path: Path) -> Path:
     """A bare 'GitHub' with one commit on main containing src/app.txt and AGENTS.md."""

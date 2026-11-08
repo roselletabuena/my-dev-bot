@@ -1,4 +1,4 @@
-{% from "_partials.md" import ticket_note, ticket, rules %}
+{% from "_partials.md" import ticket_note, ticket, rules, guidance %}
 You are implementing Jira ticket {{ issue.key }} in this repository.
 {{ ticket_note() }}
 
@@ -7,6 +7,11 @@ You are implementing Jira ticket {{ issue.key }} in this repository.
 {% if agents_md | trim %}
 Repository conventions (AGENTS.md):
 {{ agents_md | trim }}
+
+{% endif %}
+{% set repo_guidance = guidance(guide, repo) | trim %}
+{% if repo_guidance %}
+{{ repo_guidance }}
 
 {% endif %}
 Rules:

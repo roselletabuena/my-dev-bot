@@ -1,5 +1,5 @@
-{% from "_partials.md" import ticket_note, ticket, rules %}
-BUGFIX. You are fixing the defect in Jira ticket {{ issue.key }} in this repository{% if repo.spec_aware %}, following the repo's spec-aware bugfix method (.agents/skills/spec-aware-bugfix/SKILL.md; read it if present){% endif %}.
+{% from "_partials.md" import ticket_note, ticket, rules, guidance %}
+BUGFIX. You are fixing the defect in Jira ticket {{ issue.key }} in this repository{% if guide.bugfix_skill %}, following the repo's bugfix method ({{ guide.bugfix_skill.path }}; read it first){% endif %}.
 {{ ticket_note() }}
 
 {{ ticket(issue) }}
@@ -7,6 +7,11 @@ BUGFIX. You are fixing the defect in Jira ticket {{ issue.key }} in this reposit
 {% if agents_md | trim %}
 Repository conventions (AGENTS.md):
 {{ agents_md | trim }}
+
+{% endif %}
+{% set repo_guidance = guidance(guide, repo) | trim %}
+{% if repo_guidance %}
+{{ repo_guidance }}
 
 {% endif %}
 Method:
