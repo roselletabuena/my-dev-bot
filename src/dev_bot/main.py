@@ -35,7 +35,7 @@ def build_pipeline(config_path: Path, dry_run: bool) -> Pipeline:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="electa-bot", description="Jira tickets -> draft GitHub PRs")
+    parser = argparse.ArgumentParser(prog="dev-bot", description="Jira tickets -> draft GitHub PRs")
     parser.add_argument("--config", type=Path, default=Path("config.toml"))
     parser.add_argument("--dry-run", action="store_true", help="do everything except Jira writes, push and PR")
     parser.add_argument("-v", "--verbose", action="store_true")

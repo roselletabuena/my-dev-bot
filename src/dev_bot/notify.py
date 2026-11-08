@@ -4,7 +4,7 @@ import logging
 
 import requests
 
-log = logging.getLogger("electa_bot")
+log = logging.getLogger("dev_bot")
 
 
 class Notifier:

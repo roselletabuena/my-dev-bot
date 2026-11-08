@@ -14,7 +14,7 @@ from .prompt import build_routing_prompt
 from .specs import Spec, find_by_reference, list_specs
 from .triage import extract_json
 
-log = logging.getLogger("electa_bot")
+log = logging.getLogger("dev_bot")
 
 BUGFIX, FEATURE, AMEND, TASK = "bugfix", "feature", "amend", "task"
 WORKFLOWS = (BUGFIX, FEATURE, AMEND, TASK)
@@ -66,7 +66,7 @@ def _finish(route: Route, specs: list[Spec]) -> Route:
 
 def _classify(issue: Issue, specs: list[Spec], cfg: Config, engine: CodeEngine) -> Route:
     # Empty scratch dir, like the readiness check: classification needs the ticket text and spec titles only.
-    with tempfile.TemporaryDirectory(prefix="electa-route-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="dev-route-") as scratch:
         result = engine.run(Path(scratch), build_routing_prompt(issue, specs), cfg.engine_timeout_s)
     data = extract_json(result.response) if result.ok else None
     workflow = str((data or {}).get("workflow", "")).lower()

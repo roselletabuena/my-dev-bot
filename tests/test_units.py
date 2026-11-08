@@ -5,13 +5,13 @@ import time
 import pytest
 
 from conftest import FakeEngine, make_issue
-from electa_bot.config import RepoConfig
-from electa_bot.engine.base import scrubbed_env
-from electa_bot.guardrails import check_changes
-from electa_bot.jira import JiraClient, adf_to_text
-from electa_bot.lock import LockHeld, RunLock
-from electa_bot.repo import Changes, slugify
-from electa_bot.triage import TriageError, check_readiness, extract_json
+from dev_bot.config import RepoConfig
+from dev_bot.engine.base import scrubbed_env
+from dev_bot.guardrails import check_changes
+from dev_bot.jira import JiraClient, adf_to_text
+from dev_bot.lock import LockHeld, RunLock
+from dev_bot.repo import Changes, slugify
+from dev_bot.triage import TriageError, check_readiness, extract_json
 
 
 def repo(**kw) -> RepoConfig:
@@ -61,7 +61,7 @@ def test_extract_json_tolerates_noise():
 def test_triage_parse_failure_raises():
     class Garbage:
         def run(self, workdir, prompt, timeout_s):
-            from electa_bot.engine.base import EngineResult
+            from dev_bot.engine.base import EngineResult
             return EngineResult(ok=True, response="I think it's fine")
 
     with pytest.raises(TriageError):
@@ -71,7 +71,7 @@ def test_triage_parse_failure_raises():
 def test_triage_not_ready_always_has_a_question():
     class Vague:
         def run(self, workdir, prompt, timeout_s):
-            from electa_bot.engine.base import EngineResult
+            from dev_bot.engine.base import EngineResult
             return EngineResult(ok=True, response='{"ready": false}')
 
     r = check_readiness(Vague(), make_issue(), 5)

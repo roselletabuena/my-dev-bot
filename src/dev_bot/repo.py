@@ -44,8 +44,8 @@ class RepoManager:
         root: Path,
         token: str | None = None,
         remote_url: Callable[[str], str] | None = None,
-        user_name: str = "electa-bot",
-        user_email: str = "electa-bot@users.noreply.github.com",
+        user_name: str = "dev-bot",
+        user_email: str = "dev-bot@users.noreply.github.com",
     ):
         self.root = root
         self.token = token

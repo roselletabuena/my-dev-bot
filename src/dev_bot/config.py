@@ -65,9 +65,9 @@ class Config:
     max_tickets_per_run: int = 3
     daily_cap: int = 10
     repair_rounds: int = 2  # how many times a failed check is fed back to the engine; 0 disables
-    work_dir: Path = field(default_factory=lambda: Path.home() / ".electa-bot")
-    git_user_name: str = "electa-bot"
-    git_user_email: str = "electa-bot@users.noreply.github.com"
+    work_dir: Path = field(default_factory=lambda: Path.home() / ".dev-bot")
+    git_user_name: str = "dev-bot"
+    git_user_email: str = "dev-bot@users.noreply.github.com"
 
     @property
     def paused_file(self) -> Path:

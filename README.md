@@ -1,4 +1,4 @@
-# electa-bot
+# dev-bot
 
 Polls Jira Cloud for tickets labeled for the bot, checks each is implementable, has a coding agent
 (`agy` or `claude`) implement it in an isolated git worktree, verifies the result, and opens a **draft** GitHub PR.
@@ -15,12 +15,12 @@ copy .env.example .env                 # JIRA_EMAIL, JIRA_API_TOKEN (GitHub fall
 
 ## Use
 ```powershell
-electa-bot --dry-run ticket VS-123    # full run on one ticket, no Jira writes / push / PR
-electa-bot --dry-run run               # poll once, same dry behavior
-electa-bot run                         # for real
+dev-bot --dry-run ticket VS-123    # full run on one ticket, no Jira writes / push / PR
+dev-bot --dry-run run               # poll once, same dry behavior
+dev-bot run                         # for real
 ```
-Kill switch: create `~/.electa-bot/.bot-paused` (or whatever `work_dir` is) and runs exit immediately.
-Schedule `electa-bot run` every ~15 minutes with Windows Task Scheduler; an internal lock prevents overlaps.
+Kill switch: create `~/.dev-bot/.bot-paused` (or whatever `work_dir` is) and runs exit immediately.
+Schedule `dev-bot run` every ~15 minutes with Windows Task Scheduler; an internal lock prevents overlaps.
 
 ## How a ticket flows
 claim (label `bot-claimed` in Jira) -> readiness check (vague tickets get questions, no code) -> worktree off
@@ -48,7 +48,7 @@ Tasks that only run tests, lint or typecheck (for example "Run quality gates (`n
 Feature/amend runs may also write `spec_dir` and use `spec_max_diff_lines`; they then share the normal setup, checks, repair rounds, commit and draft PR.
 
 ## Editing prompts
-Every engine prompt is a Jinja template in `src/electa_bot/prompts/` (`task.md`, `bugfix.md`, `routing.md`, `stages/*.md`, ...); `prompt.py` only passes in variables. Shared pieces are in `_partials.md`, and the Spec Kit stages extend `stages/_base.md`. Undefined variables raise instead of rendering blank. Tests and the fake engine identify prompts by their first words (`REPAIR`, `BUGFIX`, `SPECKIT PLAN`, ...), so keep those.
+Every engine prompt is a Jinja template in `src/dev_bot/prompts/` (`task.md`, `bugfix.md`, `routing.md`, `stages/*.md`, ...); `prompt.py` only passes in variables. Shared pieces are in `_partials.md`, and the Spec Kit stages extend `stages/_base.md`. Undefined variables raise instead of rendering blank. Tests and the fake engine identify prompts by their first words (`REPAIR`, `BUGFIX`, `SPECKIT PLAN`, ...), so keep those.
 
 ## Engines
 - `antigravity`: `agy --mode accept-edits --sandbox --output-format json -p ...` (verified headless; needs AI credits).

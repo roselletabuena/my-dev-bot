@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from electa_bot.config import Config, JiraConfig, RepoConfig
-from electa_bot.engine.base import EngineResult
-from electa_bot.github import PullRequest
-from electa_bot.jira import Issue
-from electa_bot.notify import Notifier
-from electa_bot.pipeline import Pipeline
-from electa_bot.repo import RepoManager
-from electa_bot.state import State
+from dev_bot.config import Config, JiraConfig, RepoConfig
+from dev_bot.engine.base import EngineResult
+from dev_bot.github import PullRequest
+from dev_bot.jira import Issue
+from dev_bot.notify import Notifier
+from dev_bot.pipeline import Pipeline
+from dev_bot.repo import RepoManager
+from dev_bot.state import State
 
 GIT_ID = ["-c", "user.name=t", "-c", "user.email=t@t"]
 

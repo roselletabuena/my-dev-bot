@@ -17,7 +17,7 @@ from .repo import RepoManager, slugify
 from .state import State
 from .workflows import Plan, build_plan
 
-log = logging.getLogger("electa_bot")
+log = logging.getLogger("dev_bot")
 
 
 @dataclass
@@ -53,11 +53,11 @@ class Pipeline:
     # -- batch ---------------------------------------------------------------------------------
     def run_once(self) -> list[Outcome]:
         if self.cfg.paused_file.exists():
-            self.notifier.send(f"electa-bot paused ({self.cfg.paused_file} exists); nothing done.")
+            self.notifier.send(f"dev-bot paused ({self.cfg.paused_file} exists); nothing done.")
             return []
         budget = min(self.cfg.max_tickets_per_run, self.cfg.daily_cap - self.state.count_today())
         if budget <= 0:
-            self.notifier.send("electa-bot: daily ticket cap reached; nothing done.")
+            self.notifier.send("dev-bot: daily ticket cap reached; nothing done.")
             return []
 
         self.repos.prune_stale()
@@ -70,7 +70,7 @@ class Pipeline:
 
     @staticmethod
     def summary(outcomes: list[Outcome]) -> str:
-        lines = [f"electa-bot run: {len(outcomes)} ticket(s)"]
+        lines = [f"dev-bot run: {len(outcomes)} ticket(s)"]
         for o in outcomes:
             tail = f" {o.pr_url}" if o.pr_url else f" ({o.detail})" if o.detail else ""
             lines.append(f"- {o.key}: {o.status}" + (f" [{o.workflow}]" if o.workflow else "") + tail)
@@ -237,7 +237,7 @@ class Pipeline:
             self._move(issue, "needs_info")
         except Exception:  # reporting must not mask the original failure
             log.exception("could not report failure on %s", issue.key)
-        self.notifier.send(f"electa-bot: {issue.key} failed: {reason[:300]}")
+        self.notifier.send(f"dev-bot: {issue.key} failed: {reason[:300]}")
         return self._finish(Outcome(issue.key, "failed", reason, workflow=workflow))
 
     def _finish(self, outcome: Outcome) -> Outcome:

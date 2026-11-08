@@ -69,5 +69,5 @@ def build_pr_body(issue_url: str, issue: Issue, results: list, repairs: int = 0)
     if passed:
         note = f" after {repairs} automatic fix round(s)" if repairs else ""
         parts.append(f"## Checks run by the bot (all passed{note})\n" + "\n".join(passed))
-    parts.append("_Opened as a draft by electa-bot. Please review before merging._")
+    parts.append("_Opened as a draft by dev-bot. Please review before merging._")
     return "\n\n".join(parts)

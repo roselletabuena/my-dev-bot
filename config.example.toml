@@ -5,15 +5,15 @@ engine_timeout_s = 900          # per engine call (triage and implementation)
 max_tickets_per_run = 3
 daily_cap = 10                  # max tickets the bot picks up per calendar day
 repair_rounds = 2               # failed checks are fed back to the engine this many times; 0 disables
-work_dir = "~/.electa-bot"      # cached clones, worktrees, sqlite state, kill-switch file
+work_dir = "~/.dev-bot"      # cached clones, worktrees, sqlite state, kill-switch file
 
-git_user_name = "electa-bot"
-git_user_email = "electa-bot@users.noreply.github.com"
+git_user_name = "dev-bot"
+git_user_email = "dev-bot@users.noreply.github.com"
 
 [jira]
 base_url = "https://the-three-devsketeers.atlassian.net"
 # Claimed tickets carry the claimed label, so a re-run never picks them up twice.
-jql = 'project = VS AND labels = electa-bot AND labels != bot-claimed AND status = "Ready for Bot" ORDER BY created ASC'
+jql = 'project = VS AND labels = dev-bot AND labels != bot-claimed AND status = "Ready for Bot" ORDER BY created ASC'
 claimed_label = "bot-claimed"
 
 [jira.workflow_labels]          # optional: a ticket with one of these labels skips routing and runs that workflow
