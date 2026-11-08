@@ -49,6 +49,16 @@ def test_adf_to_text():
     assert adf_to_text(None) == ""
 
 
+def test_adf_to_text_renders_figma_smart_link():
+    adf = {"type": "doc", "content": [
+        {"type": "paragraph", "content": [
+            {"type": "text", "text": "Figma: ", "marks": [{"type": "strong"}]},
+            {"type": "inlineCard", "attrs": {"url": "https://www.figma.com/design/abc?node-id=1-2"}},
+        ]},
+    ]}
+    assert "https://www.figma.com/design/abc?node-id=1-2" in adf_to_text(adf)
+
+
 def test_slugify():
     assert slugify("Fix: the Login!! button") == "fix-the-login-button"
     assert slugify("???") == "change"
@@ -107,7 +117,7 @@ def test_jira_search_transition_and_comment(requests_mock):
     requests_mock.post(f"{base}/search/jql", json={"issues": [{
         "key": "ELE-9",
         "fields": {"summary": "S", "project": {"key": "ELE"}, "status": {"name": "Ready for Bot"},
-                   "labels": ["electa-bot"],
+                   "labels": ["dev-bot"],
                    "description": {"type": "doc", "content": [
                        {"type": "paragraph", "content": [{"type": "text", "text": "Do it"}]}]}},
     }]})

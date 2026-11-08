@@ -31,9 +31,16 @@ def adf_to_text(node: object) -> str:
         return "".join(adf_to_text(n) for n in node)
     kind = node.get("type")
     if kind == "text":
-        return node.get("text", "")
+        text = node.get("text", "")
+        link = next((m for m in node.get("marks", []) if m.get("type") == "link"), None)
+        if link:
+            href = link.get("attrs", {}).get("href", "")
+            return f"{text} ({href})" if href and href not in text else text
+        return text
     if kind == "hardBreak":
         return "\n"
+    if kind in ("inlineCard", "blockCard", "embedCard"):
+        return node.get("attrs", {}).get("url", "")
     inner = adf_to_text(node.get("content"))
     if kind in ("paragraph", "heading", "listItem", "codeBlock", "blockquote"):
         return inner.rstrip("\n") + "\n"
