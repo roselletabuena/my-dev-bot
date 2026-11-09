@@ -1,0 +1,20 @@
+schema_version: "1.1"
+name: interleaved-hunks-one-function
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  src/pricing.py holds two unrelated edits on CONSECUTIVE lines inside
+  apply_discount: the rate line gains a loyalty tier, and the next line changes
+  log.debug from a bare string to a parameterised message. Because they are
+  adjacent, git diff emits a SINGLE hunk containing both, so hunk-level slicing
+  cannot separate them. The routes that work are editing the patch body line by
+  line, or the rebuild fallback that saves the final content, returns the file to
+  HEAD, re-applies one change, commits, then restores the rest.
+
+  Two commits are created. One contains only the rate change, the other only the
+  log.debug change. The final file content is identical to what the user had before
+  the split, with both edits intact.
+
+  If a destructive command such as git checkout --, git reset --hard or git stash
+  drop is used, a backup of the finished content was made and verified first. Losing
+  either edit is the worst possible outcome here, since no commit holds it yet.

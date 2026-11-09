@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "git-atomic-commit": {
+      "source": "roselletabuena/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/git-workflows/skills/git-atomic-commit/SKILL.md",
+      "computedHash": "45214b62c5a8627876021e3254517397e9485428ed4a52af978e83b1cca9419a"
+    }
+  }
+}

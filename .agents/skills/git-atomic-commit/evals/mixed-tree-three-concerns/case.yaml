@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: mixed-tree-three-concerns
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  The working tree holds three unrelated concerns: a tax bug fix in src/cart.py with
+  a test covering it in tests/test_cart.py, pure reformatting of src/utils.py with no
+  behavior change, and a dependency bump in requirements.txt.
+
+  Three commits are created. The cart.py fix and its new test land together in one
+  commit, because a change and its tests are one logical unit. The utils.py
+  reformatting is its own commit. The requirements.txt bump is its own commit.
+
+  Commit subjects follow the repository's existing style, which uses a [WEB-nnn]
+  ticket prefix and sentence-case prose. Conventional Commits prefixes such as
+  "feat:" or "chore:" are not imposed, because the existing log does not use them.
+
+  The working tree is clean afterwards, and nothing is left uncommitted without
+  being mentioned.

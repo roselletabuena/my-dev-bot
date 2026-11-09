@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: intra-file-two-changes
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  src/handlers.py holds two unrelated edits: REQUEST_TIMEOUT raised from 5 to 30, and
+  a typo fix in the log message inside close(), which changes "closeing client
+  conection" to "closing client connection". Both are in the same file, so whole-file
+  staging cannot separate them.
+
+  Two commits are created. One contains only the REQUEST_TIMEOUT change, the other
+  contains only the log message typo fix. Neither commit contains both edits, since
+  the user explicitly wants the timeout change revertable on its own.
+
+  The split is achieved without relying on interactive git commands. git add -p,
+  git add -i, git commit -p and git checkout -p stage nothing in a non-interactive
+  environment while still exiting 0, so a run that depends on one of them and trusts
+  the exit code produces a wrong result. Acceptable approaches are slicing the diff
+  and applying it with git apply --cached, or saving the file content and rebuilding
+  it between commits.
+
+  Commit subjects use the Conventional Commits style already present in this
+  repository log, since that is the local convention here.
+
+  The working tree is clean afterwards and both edits are present in the final file.

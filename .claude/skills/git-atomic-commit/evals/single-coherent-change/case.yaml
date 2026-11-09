@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: single-coherent-change
+expected_outcome: |
+  This case is a deliberate trap. The user asks for the work to be split into atomic
+  commits, but the tree holds exactly one logical change spread over three files: a
+  new format_duration helper in src/format.py, the call site in src/report.py that
+  uses it, and its test in tests/test_format.py.
+
+  Splitting by file would produce broken or incomplete intermediate commits - the
+  helper with nothing calling it, or a report module importing a function that does
+  not exist yet, which fails at import time. So the correct result is a single commit
+  containing all three files.
+
+  A run that mechanically obeys the word "split" and produces three commits has done
+  the wrong thing, even though it followed the instruction literally. A good run
+  commits once and briefly explains why this is already atomic, so the user
+  understands rather than being silently overruled.
+
+  Commit subjects use the plain sentence-case prose style of the existing log, with
+  no Conventional Commits prefix. The working tree is clean afterwards.
+context:
+  scaffold_script: place-files.sh

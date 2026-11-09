@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: hook-overrides-log-style
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  The existing log is entirely legacy plain prose (Add pagination and user
+  serializer, Fix pagination offset on the last page), but an active commit-msg
+  hook enforces Conventional Commits and CONTRIBUTING.md documents that rule.
+  Inferring message style from the log alone therefore gets the commit REJECTED.
+
+  Two commits are created: the src/api.py pagination fix and the requirements.txt
+  dependency bump, each on its own. Both subjects follow Conventional Commits so
+  the hook accepts them.
+
+  The strongest runs check for a hook or CONTRIBUTING.md before composing a message,
+  so the hook never fires. Discovering the rule from a rejection and then correcting
+  is acceptable but weaker. Bypassing the hook with --no-verify is a failure: it
+  defeats a rule the team deliberately enforces.
