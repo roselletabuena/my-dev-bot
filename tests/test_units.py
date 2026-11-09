@@ -77,6 +77,9 @@ def test_slugify():
 def test_extract_json_tolerates_noise():
     assert extract_json('Sure! {"ready": true, "questions": []} done') == {"ready": True, "questions": []}
     assert extract_json("no json here") is None
+    # Prioritizes dict with 'ready' if an earlier unrelated dict exists
+    noisy = 'Here is config {"timeout": 30} and answer {"ready": false, "questions": ["why?"]}'
+    assert extract_json(noisy) == {"ready": False, "questions": ["why?"]}
 
 
 def test_triage_parse_failure_raises():
@@ -122,6 +125,55 @@ def test_triage_markdown_fallback():
     assert not r_not_ready.ready
     assert len(r_not_ready.questions) == 2
     assert "Where should this file live?" in r_not_ready.questions[0]
+
+
+def test_triage_ad4_style_markdown():
+    """Reproduces the exact shape of engine output seen on AD-4 that crashed triage."""
+    class AD4MarkdownReady:
+        def run(self, workdir, prompt, timeout_s):
+            from dev_bot.engine.base import EngineResult
+            return EngineResult(
+                ok=True,
+                response=(
+                    "# Readiness Check: [AD-4](https://the-three-devsketeers.atlassian.net/browse/AD-4) — Implement Avatar Group component\n\n"
+                    "---\n\n"
+                    "### **1. Ticket Overview**\n"
+                    "* **Issue Key**: [`AD-4`](https://the-three-devsketeers.atlassian.net/browse/AD-4)\n"
+                    "* **Summary**: Implement Avatar Group component\n\n"
+                    "### **2. Requirements & Acceptance Criteria**\n"
+                    "- 5-file co-located structure under `src/components/data-display/AvatarGroup/`\n\n"
+                    "### **3. Readiness Verdict**\n\n"
+                    "**READY**\n"
+                    "The ticket contains all necessary context and criteria to begin implementation."
+                ),
+            )
+
+    class AD4MarkdownNotReady:
+        def run(self, workdir, prompt, timeout_s):
+            from dev_bot.engine.base import EngineResult
+            return EngineResult(
+                ok=True,
+                response=(
+                    "# Readiness Check: [AD-4](https://the-three-devsketeers.atlassian.net/browse/AD-4) — Implement Avatar Group component\n\n"
+                    "---\n\n"
+                    "### **1. Ticket Overview**\n"
+                    "* **Issue Key**: [`AD-4`](https://the-three-devsketeers.atlassian.net/browse/AD-4)\n\n"
+                    "### **2. Missing Information**\n"
+                    "1. The Figma link is missing from the ticket description.\n"
+                    "2. What avatar sizes and variants should be supported?\n\n"
+                    "### **3. Readiness Verdict**\n\n"
+                    "🔴 **NOT READY**\n"
+                ),
+            )
+
+    r_ready = check_readiness(AD4MarkdownReady(), make_issue(), 5)
+    assert r_ready.ready and not r_ready.questions
+
+    r_not_ready = check_readiness(AD4MarkdownNotReady(), make_issue(), 5)
+    assert not r_not_ready.ready
+    assert len(r_not_ready.questions) == 2
+    assert "Figma link is missing" in r_not_ready.questions[0]
+    assert "sizes and variants" in r_not_ready.questions[1]
 
 
 def test_triage_not_ready_always_has_a_question():

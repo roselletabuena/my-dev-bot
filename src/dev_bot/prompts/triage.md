@@ -13,3 +13,4 @@ or
 {"ready": false, "questions": ["specific question", ...]}
 
 If ready is true, questions must be empty. Output the raw JSON object now. Do not output greetings, commentary, markdown headings, or conversational text.
+CRITICAL: Output ONLY the raw JSON object starting with { and ending with }. Absolutely no other text, markdown formatting, or headings.
