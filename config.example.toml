@@ -84,7 +84,7 @@ max_diff_lines = 600            # a component is 5 files plus stories and tests
 env = { npm_config_cache = "{work_dir}/npm-cache" }
 
 # Everything in .agents/skills is offered except these: they commit, open PRs, or are not about building a component.
-skills_exclude = ["create-component-pr", "git-atomic-commit", "graphify", "grill-me", "create-components-parallel", "code-review", "design-tokens", "playwright-best-practices"]
+skills_exclude = ["create-component-pr", "graphify", "grill-me", "create-components-parallel", "code-review", "design-tokens", "playwright-best-practices"]
 read_first = [                  # mandatory per this repo's AGENTS.md
   ".agents/rules/design-tokens.md",
   ".agents/rules/component-architecture.md",
