@@ -45,11 +45,24 @@ class GitHubClient:
         prs = resp.json()
         return PullRequest(prs[0]["number"], prs[0]["html_url"]) if prs else None
 
+    def convert_to_draft(self, repo: str, number: int) -> None:
+        """Ensure the PR is marked as draft (best effort via gh CLI)."""
+        try:
+            subprocess.run(
+                ["gh", "pr", "ready", str(number), "--undo", "-R", repo],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except Exception:
+            pass
+
     def open_draft_pr(
         self, repo: str, branch: str, base: str, title: str, body: str, labels: list[str] | None = None
     ) -> PullRequest:
         existing = self.find_open_pr(repo, branch)  # retried ticket: force-pushed branch already has a PR
         if existing:
+            self.convert_to_draft(repo, existing.number)
             return existing
         resp = self.session.post(
             f"https://api.github.com/repos/{repo}/pulls",

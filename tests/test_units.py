@@ -192,3 +192,15 @@ def test_a_missing_jira_transition_says_what_the_workflow_does_offer(requests_mo
     post = requests_mock.post(base, status_code=204)
     assert client.transition("AD-1", "For Review") is True  # matched by the target status, not the transition's name
     assert post.last_request.json() == {"transition": {"id": "5"}}
+
+
+def test_github_open_draft_pr_converts_existing_to_draft(monkeypatch):
+    from dev_bot.github import GitHubClient, PullRequest
+
+    client = GitHubClient("fake-token")
+    monkeypatch.setattr(client, "find_open_pr", lambda repo, branch: PullRequest(42, "https://github.com/o/r/pull/42"))
+    converted = []
+    monkeypatch.setattr(client, "convert_to_draft", lambda repo, num: converted.append((repo, num)))
+    pr = client.open_draft_pr("o/r", "bot/x", "main", "title", "body")
+    assert pr.number == 42
+    assert converted == [("o/r", 42)]

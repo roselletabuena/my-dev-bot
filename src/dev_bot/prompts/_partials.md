@@ -45,6 +45,6 @@ Rules specific to this repository:
 {% macro rules(repo) %}
 - Only edit files under: {{ repo.allowed_paths | join(", ") or "(anywhere not denied)" }}
 - Never edit: {{ repo.denied_paths | join(", ") or "(none)" }}
-- Do not commit, push, or change git configuration; the bot does that.
+- Do not commit, push, or open pull requests (e.g. via gh pr create or /create-component-pr); the bot manages git and opens the draft PR automatically.
 - Do not install dependencies or touch lockfiles.
 {%- endmacro %}
