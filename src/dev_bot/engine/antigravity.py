@@ -21,7 +21,17 @@ class AntigravityEngine:
         self.sandbox = sandbox
 
     def run(self, workdir: Path, prompt: str, timeout_s: int) -> EngineResult:
-        cmd = [self.executable, "--mode", self.mode, "--print-timeout", f"{timeout_s}s", "--output-format", "json"]
+        cmd = [
+            self.executable,
+            "--mode",
+            self.mode,
+            "--print-timeout",
+            f"{timeout_s}s",
+            "--output-format",
+            "json",
+            "--disable-slash-commands",
+            "--dangerously-skip-permissions",
+        ]
         if self.sandbox:
             cmd.append("--sandbox")
         cmd += ["-p", prompt]
@@ -35,8 +45,13 @@ class AntigravityEngine:
 
         data = parse_last_json(proc.stdout) or {}
         status = str(data.get("status", "")).upper()
-        error = data.get("error") or (proc.stderr.strip()[-500:] if proc.returncode else None)
-        ok = proc.returncode == 0 and status != "ERROR" and not data.get("error")
+        denied = data.get("denied_actions")
+        error = data.get("error")
+        if not error and denied and not data.get("response"):
+            error = f"actions denied by headless mode: {denied}"
+        if not error and proc.returncode != 0:
+            error = proc.stderr.strip()[-500:] or f"agy exited {proc.returncode}"
+        ok = proc.returncode == 0 and status != "ERROR" and not error
         return EngineResult(
             ok=ok,
             response=str(data.get("response", "")),

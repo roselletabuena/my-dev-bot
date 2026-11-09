@@ -87,7 +87,7 @@ def _finish(route: Route, specs: list[Spec]) -> Route:
 
 def _classify(issue: Issue, specs: list[Spec], cfg: Config, engine: CodeEngine, allowed: list[str]) -> Route:
     # Empty scratch dir, like the readiness check: classification needs the ticket text and spec titles only.
-    with tempfile.TemporaryDirectory(prefix="dev-route-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="dev-route-", ignore_cleanup_errors=True) as scratch:
         result = engine.run(Path(scratch), build_routing_prompt(issue, specs, allowed), cfg.engine_timeout_s)
     data = extract_json(result.response) if result.ok else None
     workflow = str((data or {}).get("workflow", "")).lower()

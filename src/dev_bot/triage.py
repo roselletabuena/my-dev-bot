@@ -36,7 +36,7 @@ def extract_json(text: str) -> dict | None:
 
 def check_readiness(engine: CodeEngine, issue: Issue, timeout_s: int) -> Readiness:
     # Runs in an empty scratch dir: triage needs the ticket text only, never repo access.
-    with tempfile.TemporaryDirectory(prefix="dev-triage-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="dev-triage-", ignore_cleanup_errors=True) as scratch:
         result = engine.run(Path(scratch), build_triage_prompt(issue), timeout_s)
     if not result.ok:
         raise TriageError(f"engine failed during readiness check: {result.error}")

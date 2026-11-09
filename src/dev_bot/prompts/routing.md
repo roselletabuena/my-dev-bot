@@ -1,5 +1,6 @@
 {% from "_partials.md" import ticket_note, ticket %}
-ROUTING. Do not modify any files.
+ROUTING for Jira ticket {{ issue.key }}.
+CRITICAL: DO NOT call any tools, functions, or shell commands. DO NOT execute any commands or modify any files. Respond directly in text with the JSON object.
 {{ ticket_note() }}
 
 {{ ticket(issue) }}

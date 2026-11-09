@@ -96,7 +96,7 @@ def _generate(
     prompt = build_pr_description_prompt(issue, jira_base_url, template, clipped)
     try:
         # Empty scratch dir: the model only needs the text above, never repo or network access.
-        with tempfile.TemporaryDirectory(prefix="dev-pr-") as scratch:
+        with tempfile.TemporaryDirectory(prefix="dev-pr-", ignore_cleanup_errors=True) as scratch:
             result = engine.run(Path(scratch), prompt, timeout_s)
     except Exception:  # a description problem must never block an otherwise good PR
         log.exception("PR description generation crashed; using fallback")
