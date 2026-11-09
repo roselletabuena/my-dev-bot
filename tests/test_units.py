@@ -89,6 +89,41 @@ def test_triage_parse_failure_raises():
         check_readiness(Garbage(), make_issue(), 5)
 
 
+def test_triage_markdown_fallback():
+    class MarkdownReady:
+        def run(self, workdir, prompt, timeout_s):
+            from dev_bot.engine.base import EngineResult
+            return EngineResult(
+                ok=True,
+                response=(
+                    "# Readiness Check: Jira Ticket [AD-14]\n\n"
+                    "### **Summary:** Implement Calendar Button\n\n"
+                    '### **Readiness Verdict:** <span style="color:green; font-weight:bold;">READY</span>'
+                ),
+            )
+
+    class MarkdownNotReady:
+        def run(self, workdir, prompt, timeout_s):
+            from dev_bot.engine.base import EngineResult
+            return EngineResult(
+                ok=True,
+                response=(
+                    "# Readiness Check\n"
+                    "### Readiness Verdict: NOT READY\n"
+                    "- Where should this file live?\n"
+                    "- What are the test expectations?"
+                ),
+            )
+
+    r_ready = check_readiness(MarkdownReady(), make_issue(), 5)
+    assert r_ready.ready and not r_ready.questions
+
+    r_not_ready = check_readiness(MarkdownNotReady(), make_issue(), 5)
+    assert not r_not_ready.ready
+    assert len(r_not_ready.questions) == 2
+    assert "Where should this file live?" in r_not_ready.questions[0]
+
+
 def test_triage_not_ready_always_has_a_question():
     class Vague:
         def run(self, workdir, prompt, timeout_s):

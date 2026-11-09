@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,28 @@ def extract_json(text: str) -> dict | None:
     return None
 
 
+def _parse_readiness_fallback(text: str) -> Readiness | None:
+    """Best-effort extraction if the model emitted a formatted text/markdown verdict instead of JSON."""
+    m = re.search(
+        r"(?:readiness\s+verdict|verdict|status)[^\n:]*:\s*(?:<[^>]+>|[*\s`])*\b(NOT\s*READY|UNREADY|READY)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    verdict = m.group(1).upper()
+    if "NOT" in verdict or "UN" in verdict:
+        questions = [
+            line.strip().lstrip("-*0123456789.) ").strip()
+            for line in text.splitlines()
+            if line.strip().startswith(("-", "*")) and "?" in line
+        ]
+        if not questions:
+            questions = ["Please add more detail and acceptance criteria so this can be implemented."]
+        return Readiness(ready=False, questions=questions)
+    return Readiness(ready=True, questions=[])
+
+
 def check_readiness(engine: CodeEngine, issue: Issue, timeout_s: int) -> Readiness:
     # Runs in an empty scratch dir: triage needs the ticket text only, never repo access.
     with tempfile.TemporaryDirectory(prefix="dev-triage-", ignore_cleanup_errors=True) as scratch:
@@ -41,10 +64,15 @@ def check_readiness(engine: CodeEngine, issue: Issue, timeout_s: int) -> Readine
     if not result.ok:
         raise TriageError(f"engine failed during readiness check: {result.error}")
     data = extract_json(result.response)
-    if data is None or "ready" not in data:
-        raise TriageError(f"unparseable readiness reply: {result.response[:200]!r}")
-    questions = [str(q) for q in data.get("questions") or []]
-    ready = bool(data["ready"])
-    if not ready and not questions:
-        questions = ["Please add more detail and acceptance criteria so this can be implemented."]
-    return Readiness(ready=ready, questions=[] if ready else questions)
+    if data is not None and "ready" in data:
+        questions = [str(q) for q in data.get("questions") or []]
+        ready = bool(data["ready"])
+        if not ready and not questions:
+            questions = ["Please add more detail and acceptance criteria so this can be implemented."]
+        return Readiness(ready=ready, questions=[] if ready else questions)
+
+    fallback = _parse_readiness_fallback(result.response)
+    if fallback is not None:
+        return fallback
+
+    raise TriageError(f"unparseable readiness reply: {result.response[:200]!r}")
