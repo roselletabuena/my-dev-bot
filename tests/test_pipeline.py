@@ -1,6 +1,30 @@
 from __future__ import annotations
 
 from conftest import FakeEngine, git, make_issue
+from dev_bot.jira import Blocker
+
+
+def test_blocked_ticket_is_skipped_without_claim_and_commented(build):
+    engine = FakeEngine()
+    pipeline, jira, gh, _ = build(engine)
+    blocker = Blocker(key="ELE-2", summary="Prereq", status="In Progress", resolved=False)
+    outcome = pipeline.process(make_issue(blockers=[blocker]))
+
+    assert outcome.status == "skipped"
+    assert "ELE-2" in outcome.detail
+    assert not engine.prompts  # never touched the engine
+    assert not gh.opened
+    assert any(c[0] == "comment" and c[1] == "ELE-1" for c in jira.calls)
+    assert not any(c[0] in ("add_label", "remove_label", "transition") for c in jira.calls)
+
+
+def test_resolved_blocker_does_not_block(build):
+    engine = FakeEngine()
+    pipeline, jira, gh, _ = build(engine)
+    blocker = Blocker(key="ELE-2", summary="Prereq", status="Done", resolved=True)
+    outcome = pipeline.process(make_issue(blockers=[blocker]))
+
+    assert outcome.status == "pr_opened"
 
 
 def test_happy_path_opens_draft_pr_and_pushes_bot_branch(build, origin, cfg):

@@ -9,6 +9,14 @@ log = logging.getLogger("dev_bot")
 
 
 @dataclass
+class Blocker:
+    key: str
+    summary: str
+    status: str
+    resolved: bool  # statusCategory is "done"
+
+
+@dataclass
 class Issue:
     key: str
     summary: str
@@ -19,6 +27,11 @@ class Issue:
     labels: list[str] = field(default_factory=list)
     parent_key: str = ""  # parent epic, when the ticket has one
     parent_summary: str = ""
+    blockers: list[Blocker] = field(default_factory=list)  # "is blocked by" links, any status
+
+    @property
+    def open_blockers(self) -> list[Blocker]:
+        return [b for b in self.blockers if not b.resolved]
 
 
 def adf_to_text(node: object) -> str:
@@ -78,7 +91,30 @@ class JiraClient:
             labels=list(f.get("labels") or []),
             parent_key=(f.get("parent") or {}).get("key", ""),
             parent_summary=((f.get("parent") or {}).get("fields") or {}).get("summary", ""),
+            blockers=self._blockers(f.get("issuelinks") or []),
         )
+
+    @staticmethod
+    def _blockers(issuelinks: list[dict]) -> list[Blocker]:
+        """"Is blocked by" links from an issuelinks field, in either direction Jira may send them."""
+        blockers = []
+        for link in issuelinks:
+            other = link.get("inwardIssue")
+            inward = (link.get("type") or {}).get("inward", "")
+            if other is None or inward.strip().lower() != "is blocked by":
+                continue
+            other_fields = other.get("fields") or {}
+            status = other_fields.get("status") or {}
+            category = (status.get("statusCategory") or {}).get("key", "")
+            blockers.append(
+                Blocker(
+                    key=other["key"],
+                    summary=other_fields.get("summary", ""),
+                    status=status.get("name", ""),
+                    resolved=category == "done",
+                )
+            )
+        return blockers
 
     def search(self, jql: str, max_results: int = 25) -> list[Issue]:
         resp = self.session.post(
@@ -86,7 +122,7 @@ class JiraClient:
             json={
                 "jql": jql,
                 "maxResults": max_results,
-                "fields": ["summary", "description", "project", "status", "issuetype", "labels", "parent"],
+                "fields": ["summary", "description", "project", "status", "issuetype", "labels", "parent", "issuelinks"],
             },
             timeout=30,
         )

@@ -88,6 +88,9 @@ class Pipeline:
             return self._fail(issue, f"Unexpected error: {exc}")
 
     def _process(self, issue: Issue, repo: RepoConfig) -> Outcome:
+        if issue.open_blockers:
+            return self._blocked(issue)
+
         self._claim(issue)
 
         readiness = triage.check_readiness(self.engine, issue, self.cfg.engine_timeout_s)
@@ -221,6 +224,14 @@ class Pipeline:
             log.info("[dry-run] skip transition %s -> %s", issue.key, name)
         elif not self.jira.transition(issue.key, name):
             log.warning("%s: no transition named %r available", issue.key, name)
+
+    def _blocked(self, issue: Issue) -> Outcome:
+        """Still blocked by an unresolved ticket: leave the claim/status alone so the next poll re-checks it."""
+        names = ", ".join(f"{b.key} ({b.status})" for b in issue.open_blockers)
+        detail = f"Blocked by {names}"
+        self._say(issue, f"{detail}. The bot will pick this up once it's unblocked.")
+        self.notifier.send(f"dev-bot: {issue.key} is blocked by {names}; skipping.")
+        return self._finish(Outcome(issue.key, "skipped", detail))
 
     def _bounce(self, issue: Issue, intro: str, questions: list[str], workflow: str = "") -> Outcome:
         """Hand the ticket back with questions and release the claim so it can be picked up again."""
