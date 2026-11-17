@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import re
 import shutil
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import RepoConfig
+
+log = logging.getLogger(__name__)
 
 
 class GitError(RuntimeError):
@@ -30,12 +33,24 @@ def slugify(text: str, max_len: int = 40) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:max_len].strip("-") or "change"
 
 
-def _rmtree(path: Path) -> None:
+def _rmtree(path: Path, *, retries: int = 5, delay: float = 0.25) -> None:
     def onerror(func, p, _exc):  # read-only files (e.g. .git objects, node_modules) on Windows
-        os.chmod(p, stat.S_IWRITE)
+        try:
+            os.chmod(p, stat.S_IWRITE)
+        except OSError:
+            pass
         func(p)
 
-    shutil.rmtree(path, onerror=onerror)
+    for attempt in range(retries):
+        try:
+            shutil.rmtree(path, onerror=onerror)
+            return
+        except OSError:
+            if not path.exists():
+                return
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay * (attempt + 1))
 
 
 class RepoManager:
@@ -127,7 +142,10 @@ class RepoManager:
         cache = self.cache_path(repo)
         self._git("worktree", "remove", "--force", str(path), cwd=cache, check=False)
         if path.exists():
-            _rmtree(path)
+            try:
+                _rmtree(path)
+            except OSError as exc:
+                log.warning("could not remove worktree %s (will retry on next prune): %s", path, exc)
         self._git("worktree", "prune", cwd=cache, check=False)
 
     def prune_stale(self) -> None:
@@ -135,7 +153,10 @@ class RepoManager:
         if self.worktrees_dir.exists():
             for leftover in self.worktrees_dir.iterdir():
                 if leftover.is_dir():
-                    _rmtree(leftover)
+                    try:
+                        _rmtree(leftover)
+                    except OSError as exc:
+                        log.warning("could not prune stale worktree %s: %s", leftover, exc)
         repos = self.root / "repos"
         if repos.exists():
             for cache in repos.iterdir():

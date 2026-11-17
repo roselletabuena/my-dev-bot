@@ -285,6 +285,66 @@ def test_github_open_draft_pr_converts_existing_to_draft(monkeypatch):
     assert converted == [("o/r", 42)]
 
 
+def test_rmtree_retries_transient_permission_error(tmp_path, monkeypatch):
+    from dev_bot import repo as repo_mod
+
+    target = tmp_path / "wt"
+    target.mkdir()
+    (target / "file.txt").write_text("hi", encoding="utf-8")
+
+    real_rmtree = repo_mod.shutil.rmtree
+    attempts = 0
+
+    def flaky_rmtree(p, onerror=None):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise PermissionError(32, "The process cannot access the file")
+        return real_rmtree(p, onerror=onerror)
+
+    monkeypatch.setattr(repo_mod.shutil, "rmtree", flaky_rmtree)
+    monkeypatch.setattr(repo_mod.time, "sleep", lambda _s: None)
+
+    repo_mod._rmtree(target)
+    assert attempts == 3
+    assert not target.exists()
+
+
+def test_remove_worktree_warns_instead_of_raising_on_persistent_lock(tmp_path, monkeypatch, caplog):
+    from dev_bot import repo as repo_mod
+    from dev_bot.config import RepoConfig
+    from dev_bot.repo import RepoManager
+
+    wt = tmp_path / "worktrees" / "bot-vs-1"
+    wt.mkdir(parents=True)
+    repos = RepoManager(tmp_path)
+    cfg = RepoConfig(name="o/r", jira_projects=["VS"])
+
+    monkeypatch.setattr(repos, "_git", lambda *a, **kw: "")
+    monkeypatch.setattr(repo_mod, "_rmtree", lambda _p: (_ for _ in ()).throw(PermissionError(32, "locked")))
+
+    with caplog.at_level(logging.WARNING, logger="dev_bot"):
+        repos.remove_worktree(cfg, wt)  # must not raise and clobber the ticket outcome
+
+    assert "could not remove worktree" in caplog.text
+
+
+def test_prune_stale_warns_instead_of_raising_on_persistent_lock(tmp_path, monkeypatch, caplog):
+    from dev_bot import repo as repo_mod
+    from dev_bot.repo import RepoManager
+
+    repos = RepoManager(tmp_path)
+    stale = repos.worktrees_dir / "bot-vs-1"
+    stale.mkdir(parents=True)
+
+    monkeypatch.setattr(repo_mod, "_rmtree", lambda _p: (_ for _ in ()).throw(PermissionError(32, "locked")))
+
+    with caplog.at_level(logging.WARNING, logger="dev_bot"):
+        repos.prune_stale()
+
+    assert "could not prune stale worktree" in caplog.text
+
+
 def test_antigravity_engine_sends_prompt_via_stream_json_stdin(tmp_path, monkeypatch):
     import json
     import subprocess
