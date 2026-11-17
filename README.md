@@ -20,7 +20,10 @@ copy .env.example .env                 # JIRA_EMAIL, JIRA_API_TOKEN (GitHub fall
 dev-bot --dry-run ticket VS-123    # full run on one ticket, no Jira writes / push / PR
 dev-bot --dry-run run               # poll once, same dry behavior
 dev-bot run                         # for real
+dev-bot epic VS-208 --plan          # read-only: order an Epic's stories into one stack and review the Epic
+dev-bot epic VS-208 --plan --no-engine   # same, deterministic checks only (no engine call)
 ```
+`epic --plan` never writes to Jira or git. It reads the Epic's child issues and orders them into the stack they will be implemented in. "Is blocked by" links come first. Stories that name the same files under *Target Files* are kept in a fixed order, and otherwise backend goes before frontend. It also parses each story's Gherkin scenarios and Definition of Done (`story.py`). Without `--no-engine`, one engine call reviews the whole Epic: is it ready, which names and shapes the stories must share, and where they contradict each other. It exits 1 when the Epic cannot start (a link cycle, no repo for the project, or a not-ready review).
 Kill switch: create `~/.dev-bot/.bot-paused` (or whatever `work_dir` is) and runs exit immediately.
 Schedule `dev-bot run` every ~15 minutes with Windows Task Scheduler; an internal lock prevents overlaps.
 

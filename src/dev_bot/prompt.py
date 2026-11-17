@@ -40,6 +40,13 @@ def build_pr_description_prompt(issue: Issue, jira_base_url: str, template: str,
     return render("pr_description.md", issue=issue, jira_base_url=jira_base_url, template=template, diff=diff)
 
 
+def build_epic_plan_prompt(
+    epic: Issue, stories: list[Issue], overlaps: list, done: set[str], max_lines: int
+) -> str:
+    """`stories` in implementation order; `overlaps` as (key, key, [shared paths]) tuples."""
+    return render("epic_plan.md", epic=epic, stories=stories, overlaps=overlaps, done=done, max_lines=max_lines)
+
+
 ROUTING_CHOICES = ("bugfix", "amend", "feature", "task")
 
 

@@ -51,6 +51,8 @@ FILLED = TEMPLATE.replace("[VS-XX: Epic Name](https://x.example/browse/VS-XX)", 
 
 TASK_ROUTE = '{"workflow": "task", "spec": null, "reason": "small change"}'
 
+EPIC_READY = '{"ready": true, "questions": [], "contracts": [], "conflicts": [], "oversized": []}'
+
 SEED_SPEC = "# Feature Specification: Greeting\n\n**Jira Key**: [ELE-9](https://x.example/browse/ELE-9)\n"
 
 
@@ -151,7 +153,9 @@ class FakeEngine:
         route: str = TASK_ROUTE,  # raw reply to the routing prompt
         stages: dict[str, dict[str, str]] | None = None,  # prompt prefix -> files that stage writes
         stage_replies: dict[str, str] | None = None,  # prompt prefix -> reply text (default "done")
+        epic_plan: str = EPIC_READY,  # raw reply to the EPIC PLAN prompt
     ):
+        self.epic_plan = epic_plan
         self.route = route
         self.stages = stages or {}
         self.stage_replies = stage_replies or {}
@@ -179,6 +183,8 @@ class FakeEngine:
             return EngineResult(ok=True, response=body)
         if prompt.startswith("ROUTING"):
             return EngineResult(ok=True, response=self.route)
+        if prompt.startswith("EPIC PLAN"):
+            return EngineResult(ok=True, response=self.epic_plan)
         for prefix, files in self.stages.items():  # bugfix and Spec Kit stages
             if prompt.startswith(prefix):
                 for rel, content in files.items():

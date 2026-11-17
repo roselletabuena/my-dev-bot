@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 import requests
 
 log = logging.getLogger("dev_bot")
+
+_FIELDS = ["summary", "description", "project", "status", "issuetype", "labels", "parent", "issuelinks"]
+_ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]*-\d+$")
 
 
 @dataclass
@@ -28,10 +32,15 @@ class Issue:
     parent_key: str = ""  # parent epic, when the ticket has one
     parent_summary: str = ""
     blockers: list[Blocker] = field(default_factory=list)  # "is blocked by" links, any status
+    status_category: str = ""  # Jira's statusCategory key: "new" | "indeterminate" | "done"
 
     @property
     def open_blockers(self) -> list[Blocker]:
         return [b for b in self.blockers if not b.resolved]
+
+    @property
+    def done(self) -> bool:
+        return self.status_category == "done"
 
 
 def adf_to_text(node: object) -> str:
@@ -92,6 +101,7 @@ class JiraClient:
             parent_key=(f.get("parent") or {}).get("key", ""),
             parent_summary=((f.get("parent") or {}).get("fields") or {}).get("summary", ""),
             blockers=self._blockers(f.get("issuelinks") or []),
+            status_category=((f.get("status") or {}).get("statusCategory") or {}).get("key", ""),
         )
 
     @staticmethod
@@ -119,15 +129,34 @@ class JiraClient:
     def search(self, jql: str, max_results: int = 25) -> list[Issue]:
         resp = self.session.post(
             self._url("/search/jql"),
-            json={
-                "jql": jql,
-                "maxResults": max_results,
-                "fields": ["summary", "description", "project", "status", "issuetype", "labels", "parent", "issuelinks"],
-            },
+            json={"jql": jql, "maxResults": max_results, "fields": _FIELDS},
             timeout=30,
         )
         resp.raise_for_status()
         return [self._issue(i) for i in resp.json().get("issues", [])]
+
+    def search_all(self, jql: str, page_size: int = 50, limit: int = 500) -> list[Issue]:
+        """Every match, following Jira's `nextPageToken` pages, up to `limit` issues."""
+        issues: list[Issue] = []
+        token: str | None = None
+        while len(issues) < limit:
+            body: dict = {"jql": jql, "maxResults": min(page_size, limit - len(issues)), "fields": _FIELDS}
+            if token:
+                body["nextPageToken"] = token
+            resp = self.session.post(self._url("/search/jql"), json=body, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            issues.extend(self._issue(i) for i in data.get("issues", []))
+            token = data.get("nextPageToken")
+            if not token or data.get("isLast"):
+                break
+        return issues
+
+    def children(self, key: str) -> list[Issue]:
+        """The issues whose parent is `key` (an Epic's stories, or a story's sub-tasks)."""
+        if not _ISSUE_KEY.match(key):  # the key goes into JQL: never let a malformed one through
+            raise ValueError(f"not a Jira issue key: {key!r}")
+        return self.search_all(f'parent = "{key}" ORDER BY key ASC')
 
     def get_issue(self, key: str) -> Issue:
         resp = self.session.get(self._url(f"/issue/{key}"), timeout=30)
