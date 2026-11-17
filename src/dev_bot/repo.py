@@ -98,14 +98,30 @@ class RepoManager:
         self._git("config", "core.autocrlf", "false", cwd=cache)
         return cache
 
-    def create_worktree(self, repo: RepoConfig, branch: str) -> Path:
+    def create_worktree(self, repo: RepoConfig, branch: str, base_branch: str | None = None) -> Path:
+        """A fresh worktree on `branch`, started from `base_branch` on origin (the repo default if omitted).
+
+        An Epic stacks each story on the previous story's pushed `bot/` branch, so a base other than the
+        default branch must itself be a bot branch.
+        """
         if not branch.startswith("bot/"):
             raise GitError(f"refusing non-bot branch {branch!r}")
+        base = base_branch or repo.default_branch
+        if base != repo.default_branch and not base.startswith("bot/"):
+            raise GitError(f"refusing to stack on non-bot branch {base!r}")
         cache = self.ensure_cache(repo)
         self.worktrees_dir.mkdir(parents=True, exist_ok=True)
         path = self.worktrees_dir / f"{slugify(branch)}-{int(time.time())}"
-        self._git("worktree", "add", "-B", branch, str(path), f"origin/{repo.default_branch}", cwd=cache)
+        self._git("worktree", "add", "-B", branch, str(path), f"origin/{base}", cwd=cache)
         return path
+
+    def is_ancestor(self, repo: RepoConfig, older: str, newer: str) -> bool:
+        """True when origin's `newer` branch already contains every commit of origin's `older` branch."""
+        proc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", f"origin/{older}", f"origin/{newer}"],
+            cwd=self.cache_path(repo), capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        )
+        return proc.returncode == 0
 
     def remove_worktree(self, repo: RepoConfig, path: Path) -> None:
         cache = self.cache_path(repo)
