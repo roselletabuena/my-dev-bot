@@ -12,7 +12,7 @@ from __future__ import annotations
 import heapq
 import logging
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .config import Config
@@ -60,6 +60,19 @@ class EpicVerdict:
     contracts: list[dict] = field(default_factory=list)
     conflicts: list[dict] = field(default_factory=list)
     oversized: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> EpicVerdict:
+        return cls(
+            ready=bool(data.get("ready")),
+            questions=[str(q) for q in data.get("questions") or []],
+            contracts=_dicts(data.get("contracts")),
+            conflicts=_dicts(data.get("conflicts")),
+            oversized=_dicts(data.get("oversized")),
+        )
 
 
 @dataclass
@@ -221,8 +234,14 @@ def review_epic(
 
 
 # -- the whole plan ----------------------------------------------------------------------------
-def plan_epic(jira: JiraClient, engine: CodeEngine | None, key: str, cfg: Config) -> EpicReport:
-    """Read the Epic and its stories, order them, and (with an engine) review the Epic. Read-only."""
+def plan_epic(
+    jira: JiraClient, engine: CodeEngine | None, key: str, cfg: Config, verdict: EpicVerdict | None = None
+) -> EpicReport:
+    """Read the Epic and its stories, order them, and (with an engine) review the Epic. Read-only.
+
+    A `verdict` from an earlier review is used as it is, with no engine call, so a later run of the
+    same Epic keeps the contracts the first run's stories were built against.
+    """
     epic = jira.get_issue(key)
     stories = jira.children(key)
     contracts = {s.key: parse_story(s) for s in stories}
@@ -250,7 +269,9 @@ def plan_epic(jira: JiraClient, engine: CodeEngine | None, key: str, cfg: Config
         if not contract.target_paths:
             report.warnings.append(f"{story.key} names no file paths under Target Files.")
 
-    if engine is not None and not report.problems:
+    if verdict is not None and not report.problems:
+        report.verdict = verdict
+    elif engine is not None and not report.problems:
         max_lines = repo.spec_max_diff_lines if repo else 1500
         report.verdict = review_epic(engine, epic, stories, order, max_lines, cfg.engine_timeout_s)
     return report
