@@ -17,6 +17,10 @@ git_user_name = "dev-bot"
 # pushes (Settings -> Emails), e.g. "{id}+{login}@users.noreply.github.com" -- otherwise GitHub
 # attributes the commit to a nonexistent account and shows "unknown_key" instead of Verified.
 git_user_email = "dev-bot@users.noreply.github.com"
+# Optional: credit a human on every bot commit with a `Co-authored-by:` trailer (GitHub shows both
+# avatars). Use their GitHub noreply address so the commit links to their profile. Set both or neither.
+# git_co_author_name = "Your Name"
+# git_co_author_email = "{id}+{login}@users.noreply.github.com"
 
 [jira]
 base_url = "https://your-site.atlassian.net"

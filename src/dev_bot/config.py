@@ -103,6 +103,9 @@ class Config:
     work_dir: Path = field(default_factory=lambda: Path.home() / ".dev-bot")
     git_user_name: str = "dev-bot"
     git_user_email: str = "dev-bot@users.noreply.github.com"
+    # Optional human credited on every bot commit via a `Co-authored-by:` trailer; both must be set.
+    git_co_author_name: str = ""
+    git_co_author_email: str = ""
 
     @property
     def paused_file(self) -> Path:
@@ -203,6 +206,8 @@ def load_config(path: Path, env_file: Path | None = None) -> Config:
         "repair_rounds",
         "git_user_name",
         "git_user_email",
+        "git_co_author_name",
+        "git_co_author_email",
     )
     extra = {k: raw[k] for k in scalar_keys if k in raw}
     if "work_dir" in raw:

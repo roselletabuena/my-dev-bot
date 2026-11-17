@@ -47,7 +47,7 @@ def build_pipeline(config_path: Path, dry_run: bool) -> Pipeline:
     return Pipeline(
         cfg=cfg,
         jira=JiraClient(cfg.jira.base_url, cfg.secrets.jira_email, cfg.secrets.jira_api_token),
-        repos=RepoManager(cfg.work_dir, token=token, user_name=cfg.git_user_name, user_email=cfg.git_user_email),
+        repos=RepoManager(cfg.work_dir, token=token, user_name=cfg.git_user_name, user_email=cfg.git_user_email, co_author_name=cfg.git_co_author_name, co_author_email=cfg.git_co_author_email),
         github=GitHubClient(token),
         engine=make_engine(cfg.engine),
         state=State(cfg.work_dir / "state.sqlite"),
