@@ -69,6 +69,33 @@ def test_signing_key_is_picked_up_from_the_work_dir(tmp_path):
     assert RepoManager(tmp_path)._signing_key == key
 
 
+def _commit_message(tmp_path, **kw) -> str:
+    import subprocess
+
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    git = lambda *a: subprocess.run(["git", *a], cwd=wt, check=True, capture_output=True, text=True).stdout  # noqa: E731
+    git("init", "-q")
+    git("-c", "user.name=x", "-c", "user.email=x@x", "commit", "--allow-empty", "-q", "-m", "base")
+    base = git("rev-parse", "HEAD").strip()
+    (wt / "f.txt").write_text("hi", encoding="utf-8")
+    git("add", "-A")
+    RepoManager(tmp_path / "root", user_name="dev-bot", user_email="bot@x", **kw).commit(wt, "VS-1: Do thing", base)
+    return git("log", "-1", "--format=%an <%ae>%n%B")
+
+
+def test_commit_credits_the_co_author_when_configured(tmp_path):
+    out = _commit_message(
+        tmp_path, co_author_name="roselletabuena", co_author_email="31462246+roselletabuena@users.noreply.github.com"
+    )
+    assert out.startswith("dev-bot <bot@x>")
+    assert "VS-1: Do thing\n\nCo-authored-by: roselletabuena <31462246+roselletabuena@users.noreply.github.com>" in out
+
+
+def test_commit_has_no_trailer_without_a_co_author(tmp_path):
+    assert "Co-authored-by" not in _commit_message(tmp_path)
+
+
 def test_slugify():
     assert slugify("Fix: the Login!! button") == "fix-the-login-button"
     assert slugify("???") == "change"

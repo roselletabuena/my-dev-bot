@@ -46,12 +46,16 @@ class RepoManager:
         remote_url: Callable[[str], str] | None = None,
         user_name: str = "dev-bot",
         user_email: str = "dev-bot@users.noreply.github.com",
+        co_author_name: str = "",
+        co_author_email: str = "",
     ):
         self.root = root
         self.token = token
         self.remote_url = remote_url or (lambda name: f"https://github.com/{name}.git")
         self.user_name = user_name
         self.user_email = user_email
+        self.co_author_name = co_author_name
+        self.co_author_email = co_author_email
 
     # -- paths ---------------------------------------------------------------------------------
     def cache_path(self, repo: RepoConfig) -> Path:
@@ -161,6 +165,8 @@ class RepoManager:
         Normal commit: repo hooks (e.g. Husky lint-staged) run. Never --no-verify.
         """
         self._git("reset", "--soft", base, cwd=worktree)
+        if self.co_author_name and self.co_author_email:
+            message = f"{message.rstrip()}\n\nCo-authored-by: {self.co_author_name} <{self.co_author_email}>"
         signing = self._signing_key
         extra = (
             ["-c", "gpg.format=ssh", "-c", f"user.signingkey={signing}", "-c", "commit.gpgsign=true"]
