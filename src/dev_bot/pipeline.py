@@ -29,6 +29,16 @@ class Outcome:
     workflow: str = ""  # bugfix | feature | amend | task, once the ticket has been routed
 
 
+@dataclass
+class StackSlot:
+    """Where one story sits in an Epic's stack. A ticket outside an Epic has no slot."""
+
+    base_branch: str  # the branch to build on and open the PR against (the repo default for the first story)
+    satisfied: frozenset[str] = frozenset()  # in-Epic blockers whose work is already in base_branch
+    context: str = ""  # what the engine is told about the rest of the Epic; appended to its code-writing prompts
+    pr_note: str = ""  # appended to the PR description
+
+
 class Pipeline:
     def __init__(
         self,
@@ -77,28 +87,36 @@ class Pipeline:
         return "\n".join(lines)
 
     # -- one ticket ----------------------------------------------------------------------------
-    def process(self, issue: Issue) -> Outcome:
+    @staticmethod
+    def branch_for(issue: Issue) -> str:
+        return f"bot/{issue.key}-{slugify(issue.summary)}"
+
+    def process(self, issue: Issue, slot: StackSlot | None = None) -> Outcome:
         repo = self.cfg.repo_for(issue.project)
         if repo is None:
             return Outcome(issue.key, "skipped", f"no repo configured for Jira project {issue.project}")
         try:
-            return self._process(issue, repo)
+            return self._process(issue, repo, slot)
         except Exception as exc:  # one bad ticket must never stop the batch
             log.exception("unexpected failure on %s", issue.key)
             return self._fail(issue, f"Unexpected error: {exc}")
 
-    def _process(self, issue: Issue, repo: RepoConfig) -> Outcome:
-        if issue.open_blockers:
-            return self._blocked(issue)
+    def _process(self, issue: Issue, repo: RepoConfig, slot: StackSlot | None) -> Outcome:
+        satisfied = slot.satisfied if slot else frozenset()
+        blockers = [b for b in issue.open_blockers if b.key not in satisfied]
+        if blockers:
+            return self._blocked(issue, blockers)
 
         self._claim(issue)
 
-        readiness = triage.check_readiness(self.engine, issue, self.cfg.engine_timeout_s)
+        readiness = triage.check_readiness(
+            self.engine, issue, self.cfg.engine_timeout_s, slot.context if slot else ""
+        )
         if not readiness.ready:
             return self._bounce(issue, "The bot needs more detail before it can implement this", readiness.questions)
 
-        branch = f"bot/{issue.key}-{slugify(issue.summary)}"
-        worktree = self.repos.create_worktree(repo, branch)
+        branch = self.branch_for(issue)
+        worktree = self.repos.create_worktree(repo, branch, slot.base_branch if slot else None)
         try:
             base = self.repos.head_sha(worktree)
             agents_md = self._read(worktree / "AGENTS.md")
@@ -109,11 +127,17 @@ class Pipeline:
             log.info("%s: workflow %s (%s)", issue.key, route.workflow, route.reason)
             self._say(issue, f"Workflow: {route.workflow} ({route.reason}).")
             plan = build_plan(route, issue, repo, worktree, self.cfg, agents_md)
-            return self._implement(issue, repo, plan, branch, worktree, base)
+            if slot and slot.context:  # the Epic's shared contracts go to every stage that writes code
+                for stage in plan.stages:
+                    stage.prompt = f"{stage.prompt.rstrip()}\n\n{slot.context}"
+            return self._implement(issue, repo, plan, branch, worktree, base, slot)
         finally:
             self.repos.remove_worktree(repo, worktree)
 
-    def _implement(self, issue: Issue, repo: RepoConfig, plan: Plan, branch: str, worktree: Path, base: str) -> Outcome:
+    def _implement(
+        self, issue: Issue, repo: RepoConfig, plan: Plan, branch: str, worktree: Path, base: str,
+        slot: StackSlot | None = None,
+    ) -> Outcome:
         # Setup runs BEFORE the engine so the repo's own tooling (node_modules, lint hooks, a skills
         # sync) is in place while the agent edits. Setup output is re-checked by the final diff guard.
         command_env = repo.command_env(self.cfg.work_dir)
@@ -187,8 +211,11 @@ class Pipeline:
             repairs,
             self.cfg.engine_timeout_s,
         )
+        if slot and slot.pr_note:
+            body = f"{body.rstrip()}\n\n{slot.pr_note}"
         pr = self.github.open_draft_pr(
-            repo.name, branch, repo.default_branch, f"{issue.key}: {issue.summary}", body, labels=["bot"]
+            repo.name, branch, slot.base_branch if slot else repo.default_branch,
+            f"{issue.key}: {issue.summary}", body, labels=["bot"],
         )
         self._say(issue, f"Draft PR opened: {pr.url}")
         self._move(issue, "in_review")
@@ -225,9 +252,9 @@ class Pipeline:
         elif not self.jira.transition(issue.key, name):
             log.warning("%s: no transition named %r available", issue.key, name)
 
-    def _blocked(self, issue: Issue) -> Outcome:
+    def _blocked(self, issue: Issue, blockers: list) -> Outcome:
         """Still blocked by an unresolved ticket: leave the claim/status alone so the next poll re-checks it."""
-        names = ", ".join(f"{b.key} ({b.status})" for b in issue.open_blockers)
+        names = ", ".join(f"{b.key} ({b.status})" for b in blockers)
         detail = f"Blocked by {names}"
         self._say(issue, f"{detail}. The bot will pick this up once it's unblocked.")
         self.notifier.send(f"dev-bot: {issue.key} is blocked by {names}; skipping.")
