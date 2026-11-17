@@ -131,10 +131,16 @@ class FakeJira:
 class FakeGitHub:
     def __init__(self):
         self.opened: list[dict] = []
+        self.existing: dict[str, PullRequest] = {}  # branch -> a PR that is already open for it
+
+    def find_open_pr(self, repo, branch):
+        return self.existing.get(branch)
 
     def open_draft_pr(self, repo, branch, base, title, body, labels=None):
         self.opened.append({"repo": repo, "branch": branch, "base": base, "title": title, "body": body})
-        return PullRequest(1, f"https://github.com/{repo}/pull/1")
+        pr = PullRequest(len(self.opened), f"https://github.com/{repo}/pull/{len(self.opened)}")
+        self.existing[branch] = pr  # like GitHub: the PR is now open
+        return pr
 
 
 class FakeEngine:

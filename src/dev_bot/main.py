@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import ConfigError, load_config
 from .engine import make_engine
 from .epic import EpicPlanError, format_report, plan_epic
+from .epic_run import format_run, run_epic
 from .github import GitHubClient, resolve_token
 from .jira import JiraClient
 from .lock import LockHeld, RunLock
@@ -38,6 +39,32 @@ def plan_epic_command(config_path: Path, key: str, use_engine: bool) -> int:
     return 1 if report.blocking else 0
 
 
+def run_epic_command(config_path: Path, key: str, dry_run: bool, use_engine: bool, replan: bool) -> int:
+    """`dev-bot epic KEY`: build the Epic's stories one after another as a stack of draft PRs."""
+    pipeline = build_pipeline(config_path, dry_run)
+    try:
+        with RunLock(pipeline.cfg.work_dir / ".run.lock"):
+            try:
+                run = run_epic(pipeline, key, use_engine=use_engine, replan=replan)
+            except EpicPlanError as exc:
+                print(f"{key}: {exc}", file=sys.stderr)
+                return 1
+    except LockHeld as exc:
+        print(f"skipped: {exc}", file=sys.stderr)
+        return 0
+    finally:
+        pipeline.state.close()
+
+    if run.report is None:
+        print(f"{key}: {run.halted}; nothing done.", file=sys.stderr)
+        return 0
+    if run.report.blocking:  # the plan says why the Epic cannot start; nothing was built
+        print(format_report(run.report, pipeline.cfg.jira.base_url))
+        return 1
+    print(format_run(run))
+    return 1 if run.failed else 0
+
+
 def build_pipeline(config_path: Path, dry_run: bool) -> Pipeline:
     cfg = _load(config_path)
     token = resolve_token(cfg.secrets.github_token)
@@ -65,18 +92,22 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("run", help="poll Jira once and process matching tickets")
     one = sub.add_parser("ticket", help="process a single ticket by key")
     one.add_argument("key")
-    epic = sub.add_parser("epic", help="plan an Epic: order its stories into one stack and review it")
+    epic = sub.add_parser(
+        "epic", help="build an Epic's stories one after another as a stack of draft PRs (--plan to only plan it)"
+    )
     epic.add_argument("key")
     epic.add_argument("--plan", action="store_true", help="print the plan only (read-only)")
     epic.add_argument("--no-engine", action="store_true", help="skip the engine review; deterministic checks only")
+    epic.add_argument("--replan", action="store_true", help="review the Epic again instead of reusing the saved review")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(message)s")
     if args.command == "epic":
-        if not args.plan:
-            print("Running an Epic is not available yet; use `dev-bot epic KEY --plan`.", file=sys.stderr)
-            return 2
-        return plan_epic_command(args.config, args.key, use_engine=not args.no_engine)
+        if args.plan:
+            return plan_epic_command(args.config, args.key, use_engine=not args.no_engine)
+        return run_epic_command(
+            args.config, args.key, args.dry_run, use_engine=not args.no_engine, replan=args.replan
+        )
 
     pipeline = build_pipeline(args.config, args.dry_run)
     try:

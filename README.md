@@ -22,8 +22,23 @@ dev-bot --dry-run run               # poll once, same dry behavior
 dev-bot run                         # for real
 dev-bot epic VS-208 --plan          # read-only: order an Epic's stories into one stack and review the Epic
 dev-bot epic VS-208 --plan --no-engine   # same, deterministic checks only (no engine call)
+dev-bot --dry-run epic VS-208       # build every story without Jira writes / push / PR
+dev-bot epic VS-208                 # for real: one draft PR per story, stacked
+dev-bot epic VS-208 --replan        # same, but review the Epic again instead of reusing the saved review
 ```
 `epic --plan` never writes to Jira or git. It reads the Epic's child issues and orders them into the stack they will be implemented in. "Is blocked by" links come first. Stories that name the same files under *Target Files* are kept in a fixed order, and otherwise backend goes before frontend. It also parses each story's Gherkin scenarios and Definition of Done (`story.py`). Without `--no-engine`, one engine call reviews the whole Epic: is it ready, which names and shapes the stories must share, and where they contradict each other. It exits 1 when the Epic cannot start (a link cycle, no repo for the project, or a not-ready review).
+
+`dev-bot epic KEY` (without `--plan`) plans the Epic the same way, then builds its stories one at a time (`epic_run.py`):
+- **Stack.** Each story is built on the branch of the last story that was built, and its draft PR is opened against that branch, so every PR shows only its own change. Merge them from the bottom up. The PR description says where it sits in the stack.
+- **Contracts.** The engine's review of the Epic is saved the first time it says "ready" and reused on every later run, so stories built on different days use the same names. Every story's prompt gets the contracts and conflicts that name it, what is already in its branch, and what is built after it. `--replan` reviews again.
+- **A story goes wrong** (it fails, is handed back with questions, or is blocked by a ticket outside the Epic): the Epic carries on. Stories that depend on it, by an "is blocked by" link or by naming the same files, are skipped. Every other story is built on the last branch that did get built. Skipped stories are left alone in Jira.
+- **Run it again** after fixing a ticket: stories that already have an open PR are left alone and the rest are retried. If a retried story ends up beside a PR that was built without it instead of under it, a story that needs both is skipped until someone rebases the stack.
+- **Blockers.** A story is not held back by an unfinished blocker that is part of the same Epic, since that blocker's work is already in its branch. Blockers outside the Epic still hold it back.
+- **Limits.** The daily cap applies (`daily_cap`); stories left over are marked `deferred` for the next run. `max_tickets_per_run` does not apply. The kill switch and the run lock work as for `run`.
+- **Dry run.** Nothing is pushed, so the stories cannot be stacked on each other; each is built on the last real PR's branch (or the default branch) to show whether the engine can do it. The saved review is not written.
+
+It exits 1 when the Epic cannot start or a story failed.
+
 Kill switch: create `~/.dev-bot/.bot-paused` (or whatever `work_dir` is) and runs exit immediately.
 Schedule `dev-bot run` every ~15 minutes with Windows Task Scheduler; an internal lock prevents overlaps.
 

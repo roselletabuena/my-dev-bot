@@ -7,7 +7,6 @@ from conftest import FakeEngine, make_issue
 
 from dev_bot.epic import EpicPlanError, format_report, order_stories, plan_epic, review_epic
 from dev_bot.jira import Blocker, JiraClient
-from dev_bot.main import main
 from dev_bot.prompt import build_epic_plan_prompt
 from dev_bot.story import parse_story
 
@@ -248,8 +247,3 @@ def test_children_refuses_a_key_that_is_not_one():
     client = JiraClient("https://x.atlassian.net", "me@x.com", "tok")
     with pytest.raises(ValueError):
         client.children('ELE-1" OR project = SECRET')
-
-
-def test_running_an_epic_is_not_available_yet(capsys):
-    assert main(["epic", "ELE-100"]) == 2
-    assert "--plan" in capsys.readouterr().err
