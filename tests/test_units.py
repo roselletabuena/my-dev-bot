@@ -283,3 +283,34 @@ def test_github_open_draft_pr_converts_existing_to_draft(monkeypatch):
     pr = client.open_draft_pr("o/r", "bot/x", "main", "title", "body")
     assert pr.number == 42
     assert converted == [("o/r", 42)]
+
+
+def test_antigravity_engine_sends_prompt_via_stream_json_stdin(tmp_path, monkeypatch):
+    import json
+    import subprocess
+    from dev_bot.engine import antigravity as agy_mod
+
+    seen = {}
+
+    def fake_run_cli(cmd, workdir, timeout_s, stdin_text=None):
+        seen["cmd"] = cmd
+        seen["stdin"] = stdin_text
+        stdout = (
+            '{"event":"init","conversation_id":"c1"}\n'
+            '{"event":"result","result":{"status":"SUCCESS","response":"READY","duration_seconds":1.5}}\n'
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(agy_mod, "run_cli", fake_run_cli)
+    long_prompt = "x" * 20000
+    res = agy_mod.AntigravityEngine().run(tmp_path, long_prompt, 60)
+
+    assert res.ok is True
+    assert res.response == "READY"
+    assert res.duration_s == 1.5
+    assert "-p" not in seen["cmd"]
+    assert "--input-format" in seen["cmd"]
+    assert json.loads(seen["stdin"]) == {
+        "event": "user",
+        "message": {"role": "user", "content": long_prompt},
+    }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -27,23 +28,31 @@ class AntigravityEngine:
             self.mode,
             "--print-timeout",
             f"{timeout_s}s",
+            "--input-format",
+            "stream-json",
             "--output-format",
-            "json",
+            "stream-json",
             "--disable-slash-commands",
             "--dangerously-skip-permissions",
         ]
         if self.sandbox:
             cmd.append("--sandbox")
-        cmd += ["-p", prompt]
+
+        # Pass the prompt via stream-json stdin instead of `-p <prompt>` on argv:
+        # on Windows `agy.cmd` runs through cmd.exe, which caps argv at 8191 chars
+        # ("The command line is too long.") and interprets & / % in ticket text.
+        stdin_payload = json.dumps({"event": "user", "message": {"role": "user", "content": prompt}}) + "\n"
 
         try:
-            proc = run_cli(cmd, workdir, timeout_s + 30)
+            proc = run_cli(cmd, workdir, timeout_s + 30, stdin_text=stdin_payload)
         except subprocess.TimeoutExpired:
             return EngineResult(ok=False, error=f"agy exceeded {timeout_s}s")
         except FileNotFoundError:
             return EngineResult(ok=False, error=f"{self.executable!r} not found on PATH")
 
         data = parse_last_json(proc.stdout) or {}
+        if data.get("event") == "result" and isinstance(data.get("result"), dict):
+            data = data["result"]
         status = str(data.get("status", "")).upper()
         denied = data.get("denied_actions")
         error = data.get("error")
