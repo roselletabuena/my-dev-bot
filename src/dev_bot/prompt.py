@@ -32,8 +32,9 @@ def build_repair_prompt(issue: Issue, repo: RepoConfig, command: str, output: st
     return render("repair.md", issue=issue, repo=repo, command=command, output=output)
 
 
-def build_triage_prompt(issue: Issue) -> str:
-    return render("triage.md", issue=issue)
+def build_triage_prompt(issue: Issue, epic_context: str = "") -> str:
+    """`epic_context`: for a story of an Epic, what the Epic's review already decided (see build_epic_context_prompt)."""
+    return render("triage.md", issue=issue, epic_context=epic_context)
 
 
 def build_pr_description_prompt(issue: Issue, jira_base_url: str, template: str, diff: str) -> str:
@@ -45,6 +46,23 @@ def build_epic_plan_prompt(
 ) -> str:
     """`stories` in implementation order; `overlaps` as (key, key, [shared paths]) tuples."""
     return render("epic_plan.md", epic=epic, stories=stories, overlaps=overlaps, done=done, max_lines=max_lines)
+
+
+def build_epic_context_prompt(
+    epic: Issue,
+    story: Issue,
+    position: int,
+    total: int,
+    earlier: list[Issue],
+    later: list[Issue],
+    contracts: list[dict],
+    conflicts: list[dict],
+) -> str:
+    """What one story of an Epic is told about the rest of it; appended to every prompt that writes code."""
+    return render(
+        "epic_context.md", epic=epic, story=story, position=position, total=total,
+        earlier=earlier, later=later, contracts=contracts, conflicts=conflicts,
+    )
 
 
 ROUTING_CHOICES = ("bugfix", "amend", "feature", "task")

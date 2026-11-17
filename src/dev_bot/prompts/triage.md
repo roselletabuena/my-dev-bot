@@ -5,6 +5,13 @@ CRITICAL FORMAT RULE: DO NOT write markdown summaries, HTML badges, analysis, or
 {{ ticket_note() }}
 
 {{ ticket(issue) }}
+{% if epic_context %}
+
+This ticket is one story of an Epic. The whole Epic has already been reviewed and judged ready, and the other stories are implemented by their own runs. What that review decided is below.
+{{ epic_context | trim }}
+
+For this ticket, do not ask about anything the contracts and resolutions above decide, anything that belongs to another story, or anything a developer can find by reading the existing code (such as which file or route already exists). Ask only about something that nobody has decided and that a developer would otherwise have to guess.
+{% endif %}
 
 Decide whether this ticket has enough detail (clear expected behavior, where it applies, acceptance criteria) for a developer to implement without guessing.
 Reply with ONLY a raw JSON object, starting with { and ending with }:

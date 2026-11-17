@@ -137,10 +137,10 @@ def _parse_readiness_fallback(text: str) -> Readiness | None:
     return None
 
 
-def check_readiness(engine: CodeEngine, issue: Issue, timeout_s: int) -> Readiness:
+def check_readiness(engine: CodeEngine, issue: Issue, timeout_s: int, epic_context: str = "") -> Readiness:
     # Runs in an empty scratch dir: triage needs the ticket text only, never repo access.
     with tempfile.TemporaryDirectory(prefix="dev-triage-", ignore_cleanup_errors=True) as scratch:
-        result = engine.run(Path(scratch), build_triage_prompt(issue), timeout_s)
+        result = engine.run(Path(scratch), build_triage_prompt(issue, epic_context), timeout_s)
     if not result.ok:
         raise TriageError(f"engine failed during readiness check: {result.error}")
     data = extract_json(result.response)
