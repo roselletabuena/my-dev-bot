@@ -196,12 +196,7 @@ class RepoManager:
         key = self.root / "signing_key"
         return key if key.is_file() else None
 
-    def commit(self, worktree: Path, message: str, base: str) -> None:
-        """One bot-authored commit on top of `base` (squashing any commits the engine made).
-
-        Normal commit: repo hooks (e.g. Husky lint-staged) run. Never --no-verify.
-        """
-        self._git("reset", "--soft", base, cwd=worktree)
+    def _commit_staged(self, worktree: Path, message: str) -> None:
         if self.co_author_name and self.co_author_email:
             message = f"{message.rstrip()}\n\nCo-authored-by: {self.co_author_name} <{self.co_author_email}>"
         signing = self._signing_key
@@ -214,6 +209,28 @@ class RepoManager:
             "commit", "-m", message,
             cwd=worktree,
         )
+
+    def commit(self, worktree: Path, message: str, base: str) -> None:
+        """One bot-authored commit on top of `base` (squashing any commits the engine made).
+
+        Normal commit: repo hooks (e.g. Husky lint-staged) run. Never --no-verify.
+        """
+        self._git("reset", "--soft", base, cwd=worktree)
+        self._commit_staged(worktree, message)
+
+    def commit_atomic(self, worktree: Path, groups: list[tuple[str, list[str]]], base: str) -> None:
+        """Create multiple bot-authored, signed commits on top of `base` from grouped file lists."""
+        self._git("reset", "--mixed", base, cwd=worktree)
+        for message, files in groups:
+            if not files:
+                continue
+            self._git("add", "-A", "--", *files, cwd=worktree)
+            staged = subprocess.run(
+                ["git", "diff", "--cached", "--quiet"],
+                cwd=worktree, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+            )
+            if staged.returncode != 0:
+                self._commit_staged(worktree, message)
 
     def push(self, worktree: Path, branch: str) -> None:
         if not branch.startswith("bot/"):

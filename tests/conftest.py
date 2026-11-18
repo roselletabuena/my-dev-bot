@@ -160,8 +160,10 @@ class FakeEngine:
         stages: dict[str, dict[str, str]] | None = None,  # prompt prefix -> files that stage writes
         stage_replies: dict[str, str] | None = None,  # prompt prefix -> reply text (default "done")
         epic_plan: str = EPIC_READY,  # raw reply to the EPIC PLAN prompt
+        commit_plan: str | None = None,  # raw reply to the ATOMIC COMMITS prompt (None -> invalid/fallback)
     ):
         self.epic_plan = epic_plan
+        self.commit_plan = commit_plan
         self.route = route
         self.stages = stages or {}
         self.stage_replies = stage_replies or {}
@@ -191,6 +193,12 @@ class FakeEngine:
             return EngineResult(ok=True, response=self.route)
         if prompt.startswith("EPIC PLAN"):
             return EngineResult(ok=True, response=self.epic_plan)
+        if prompt.startswith("ATOMIC COMMITS"):
+            if self.commit_plan == "fail":
+                return EngineResult(ok=False, error="commit plan failed")
+            if self.commit_plan is not None:
+                return EngineResult(ok=True, response=self.commit_plan)
+            return EngineResult(ok=True, response="not json")
         for prefix, files in self.stages.items():  # bugfix and Spec Kit stages
             if prompt.startswith(prefix):
                 for rel, content in files.items():

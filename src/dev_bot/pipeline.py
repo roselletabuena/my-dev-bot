@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import guardrails, triage
+from .atomic_commit import plan_atomic_commits
 from .config import Config, RepoConfig
 from .engine.base import CodeEngine
 from .github import GitHubClient
@@ -198,7 +199,12 @@ class Pipeline:
             detail = f"{len(changes.files)} file(s), {changes.lines} line(s)"
             return Outcome(issue.key, "dry_run_ok", detail, workflow=plan.workflow)
 
-        self.repos.commit(worktree, f"{issue.key}: {issue.summary}", base)
+        diff = self.repos.diff_text(worktree, base)
+        groups = plan_atomic_commits(self.engine, issue, changes.files, diff, self.cfg.engine_timeout_s)
+        if groups:
+            self.repos.commit_atomic(worktree, [(g.message, g.files) for g in groups], base)
+        else:
+            self.repos.commit(worktree, f"{issue.key}: {issue.summary}", base)
         self.repos.push(worktree, branch)
         template = self._read(worktree / ".github" / "pull_request_template.md")
         body = build_description(
@@ -206,7 +212,7 @@ class Pipeline:
             issue,
             self.cfg.jira.base_url,
             template,
-            self.repos.diff_text(worktree, base),
+            diff,
             check_results,
             repairs,
             self.cfg.engine_timeout_s,

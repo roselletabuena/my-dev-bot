@@ -41,6 +41,10 @@ def build_pr_description_prompt(issue: Issue, jira_base_url: str, template: str,
     return render("pr_description.md", issue=issue, jira_base_url=jira_base_url, template=template, diff=diff)
 
 
+def build_atomic_commit_prompt(issue: Issue, files: list[str], diff: str) -> str:
+    return render("atomic_commit.md", issue=issue, files=files, diff=diff)
+
+
 def build_epic_plan_prompt(
     epic: Issue, stories: list[Issue], overlaps: list, done: set[str], max_lines: int
 ) -> str:
