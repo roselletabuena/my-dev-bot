@@ -374,3 +374,49 @@ def test_antigravity_engine_sends_prompt_via_stream_json_stdin(tmp_path, monkeyp
         "event": "user",
         "message": {"role": "user", "content": long_prompt},
     }
+
+
+def test_antigravity_engine_retries_transient_errors(tmp_path, monkeypatch):
+    import subprocess
+    from dev_bot.engine import antigravity as agy_mod
+
+    attempts = 0
+
+    def fake_run_cli(cmd, workdir, timeout_s, stdin_text=None):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            stdout = '{"event":"result","result":{"status":"ERROR","error":"failed to start conversation: backend returned an empty conversation id"}}\n'
+            return subprocess.CompletedProcess(cmd, 1, stdout=stdout, stderr="")
+        if attempts == 2:
+            stdout = '{"event":"result","result":{"status":"ERROR","error":"The stream was interrupted. Please continue the task you were working on."}}\n'
+            return subprocess.CompletedProcess(cmd, 1, stdout=stdout, stderr="")
+        stdout = '{"event":"result","result":{"status":"SUCCESS","response":"DONE","duration_seconds":2.0}}\n'
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(agy_mod, "run_cli", fake_run_cli)
+    res = agy_mod.AntigravityEngine(max_retries=2, retry_delay_s=0).run(tmp_path, "hi", 60)
+
+    assert attempts == 3
+    assert res.ok is True
+    assert res.response == "DONE"
+
+
+def test_antigravity_engine_does_not_retry_non_transient_errors(tmp_path, monkeypatch):
+    import subprocess
+    from dev_bot.engine import antigravity as agy_mod
+
+    attempts = 0
+
+    def fake_run_cli(cmd, workdir, timeout_s, stdin_text=None):
+        nonlocal attempts
+        attempts += 1
+        stdout = '{"event":"result","result":{"status":"ERROR","error":"credits exhausted"}}\n'
+        return subprocess.CompletedProcess(cmd, 3, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(agy_mod, "run_cli", fake_run_cli)
+    res = agy_mod.AntigravityEngine(max_retries=2, retry_delay_s=0).run(tmp_path, "hi", 60)
+
+    assert attempts == 1
+    assert res.ok is False
+    assert res.error == "credits exhausted"
