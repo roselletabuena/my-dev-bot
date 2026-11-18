@@ -52,7 +52,7 @@ check_commands = [              # all must pass; exactly what app-ci.yml runs (l
   "npm run lint",
   "npm run test:unit",
 ]
-allowed_paths = ["src/", "tests/", "public/", "prisma/schema.prisma"]
+allowed_paths = ["src/", "tests/", "public/", "prisma/schema.prisma", "docs/api-contracts.json"]
 denied_paths = [".github/", "infra/", "prisma/migrations/", ".agents/", ".claude/", ".env*", "package-lock.json"]
 max_diff_lines = 300
 spec_dir = "specs"              # Spec Kit folders; feature/amend runs may write here in addition to allowed_paths
